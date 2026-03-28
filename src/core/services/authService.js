@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { getPasswordResetRedirectUrl } from "../utils/authRedirect.js";
 
 export const authService = {
 
@@ -76,6 +77,24 @@ export const authService = {
     const { error } = await supabase.auth.signOut();
     return { error };
 
+  },
+
+  /**
+   * Demande un email de réinitialisation (flux officiel Supabase).
+   * redirectTo doit être autorisé dans Supabase → Authentication → URL Configuration → Redirect URLs.
+   */
+  async requestPasswordReset(email) {
+    const redirectTo = getPasswordResetRedirectUrl();
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo,
+    });
+    return { error };
+  },
+
+  /** À appeler sur la page dédiée, une fois la session « recovery » établie (lien email). */
+  async updatePassword(newPassword) {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return { error };
   },
 
 

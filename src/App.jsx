@@ -15,6 +15,15 @@ import RegisterArtisan from './shared/pages/RegisterArtisan.jsx';
 import CreateDevis from './shared/pages/CreateDevis.jsx';
 import DemandeInvitation from './shared/pages/DemandeInvitation.jsx'; 
 
+import AdminLayout from './admin/layout/AdminLayout';
+import AdminOverview from './admin/pages/OverviewPage';
+import AdminArtisans from './admin/pages/ArtisansPage';
+import AdminParticuliers from './admin/pages/ParticuliersPage';
+import AdminDemandes from './admin/pages/DemandesPage';
+import AdminDevis from './admin/pages/DevisPage';
+import AdminAvis from './admin/pages/AvisPage';
+import AdminModeration from './admin/pages/ModerationPage';
+import AdminSettings from './admin/pages/SettingsPage';
 
 // ── Pages publiques ───────────────────────────────────────
 const Home          = lazy(() => import('./shared/pages/Home.jsx'));
@@ -27,6 +36,7 @@ const ReputationPublic = lazy(() => import('./artisan/components/ReputationArtis
 import Login from './shared/pages/Login.jsx';
 const RegisterManual = lazy(() => import('../auth/RegisterManual.jsx'));
 const ForgotPassword = lazy(() => import('./shared/pages/ForgotPassword.jsx'));
+const ResetPassword = lazy(() => import('./shared/pages/ResetPassword.jsx'));
 const Unauthorized = lazy(() => import('./shared/pages/Unauthorized.jsx'));
 
 // ── Dashboards ────────────────────────────────────────────
@@ -93,6 +103,7 @@ function App() {
               <Route path="/inscription" element={<PublicLayout><RegisterManual /></PublicLayout>} />
               <Route path="/inscription/artisan" element={<PublicLayout><RegisterArtisan /></PublicLayout>} />
               <Route path="/mot-de-passe-oublie" element={<PublicLayout><ForgotPassword /></PublicLayout>} />
+              <Route path="/reinitialiser-mot-de-passe" element={<PublicLayout><ResetPassword /></PublicLayout>} />
 
               {/* ── Routes Particulier (utilisent ParticulierLayout) ───────────────────────── */}
               <Route path="/dashboard/particulier/*" element={
@@ -167,6 +178,25 @@ function App() {
 
               {/* Unauthorized page */}
               <Route path="/unauthorized" element={<Unauthorized />} />
+
+              {/* ── Admin (7rayfi) ───────────────────────── */}
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<AdminOverview />} />
+                <Route path="artisans" element={<AdminArtisans />} />
+                <Route path="particuliers" element={<AdminParticuliers />} />
+                <Route path="demandes" element={<AdminDemandes />} />
+                <Route path="devis" element={<AdminDevis />} />
+                <Route path="avis" element={<AdminAvis />} />
+                <Route path="moderation" element={<AdminModeration />} />
+                <Route path="parametres" element={<AdminSettings />} />
+              </Route>
 
               {/* ── Fallback ────────────────────────────── */}
               <Route path="*" element={<Navigate to="/" replace />} />

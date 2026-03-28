@@ -8,9 +8,9 @@ import { MapPin, ShieldCheck, Mail, Phone, Calendar, Clock, MessageSquare, Heart
 
 import { Link } from 'react-router-dom';
 
-import { cn } from '../core/utils/cn';
+import { cn } from '../../core/utils/cn';
 
-import ReservationModal from '../artisan/components/ReservationModal';
+import ReservationModal from '../../artisan/components/ReservationModal';
 
 import StarRating from '../components/ui/StarRating';
 

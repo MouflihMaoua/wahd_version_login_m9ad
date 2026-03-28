@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Star, MapPin, ShieldCheck, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { cn } from '../../utils/cn';
+import { cn } from '../../core/utils/cn';
 
 const ArtisanCard = ({ artisan, className }) => {
     return (

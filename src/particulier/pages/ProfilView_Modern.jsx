@@ -11,6 +11,7 @@ import {
   CheckCircle, AlertCircle, RefreshCw, Loader2
 } from 'lucide-react';
 import { supabase } from '../../core/services/supabaseClient';
+import { authService } from '../../core/services/authService';
 import { profileService } from '../../core/services/profileService';
 import { useAuthStore } from '../../core/store/useAuthStore';
 import toast from 'react-hot-toast';
@@ -315,11 +316,17 @@ export default function ProfilView() {
                       sub: 'Modifier votre mot de passe',
                       action: 'Modifier',
                       onClick: async () => {
-                        const { error } = await supabase.auth.resetPasswordForEmail(
-                          authUser?.email ?? '', { redirectTo: window.location.origin }
-                        );
-                        if (!error) toast.success('Email de réinitialisation envoyé !');
-                        else toast.error('Erreur: ' + error.message);
+                        const email = authUser?.email?.trim();
+                        if (!email) {
+                          toast.error('Adresse email introuvable.');
+                          return;
+                        }
+                        const { error } = await authService.requestPasswordReset(email);
+                        if (!error) {
+                          toast.success('Si ce compte existe, un email de réinitialisation a été envoyé.');
+                        } else {
+                          toast.error(error.message || 'Impossible d’envoyer l’email.');
+                        }
                       },
                       style: 'border border-[#1A3A5C] text-[#1A3A5C] hover:bg-[#1A3A5C] hover:text-white',
                     },
