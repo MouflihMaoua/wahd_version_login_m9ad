@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, Github } from 'lucide-react';
 import { useAuthStore } from '../../core/store/useAuthStore';
+import { supabase } from '../../core/services/supabaseClient';
+import { authenticateWithSupabase, determineUserRole } from '../../core/utils/authUtils';
 import toast from 'react-hot-toast';
 
 const Login = () => {
@@ -99,18 +101,32 @@ const Login = () => {
         setIsSubmitting(true);
         
         try {
-            // Simulation appel API
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            const authData = await authenticateWithSupabase(formData.email, formData.password, supabase);
+            const session = authData.session;
+            const sbUser = authData.user;
 
-            // Simuler une réponse selon l'email pour tester les différents dashboards
-            let role = 'particulier';
-            if (formData.email.includes('artisan')) role = 'artisan';
-            if (formData.email.includes('admin')) role = 'admin';
+            let role = null;
+            if (sbUser.email?.toLowerCase().includes('admin')) {
+                role = 'admin';
+            } else {
+                const resolved = await determineUserRole(sbUser.id, supabase);
+                role = resolved.role;
+            }
 
-            const mockUser = { id: '1', name: 'User Test', email: formData.email, role };
-            const mockToken = 'fake-jwt-token';
+            if (!role) {
+                await supabase.auth.signOut();
+                toast.error("Aucun profil artisan ou particulier lié à ce compte. Inscrivez-vous d'abord.");
+                return;
+            }
 
-            setAuth(mockUser, mockToken);
+            const appUser = {
+                id: sbUser.id,
+                email: sbUser.email ?? formData.email,
+                name: sbUser.user_metadata?.username ?? sbUser.email ?? 'Utilisateur',
+                role
+            };
+
+            setAuth(appUser, session?.access_token ?? null);
             toast.success('Bienvenue ! Connexion réussie.');
 
             const redirectPath = role === 'admin' ? '/admin' :
@@ -120,7 +136,7 @@ const Login = () => {
             navigate(redirectPath);
 
         } catch (error) {
-            toast.error('Identifiants incorrects');
+            toast.error(error.message || 'Identifiants incorrects');
         } finally {
             setIsSubmitting(false);
         }
