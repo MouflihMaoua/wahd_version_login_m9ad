@@ -131,7 +131,7 @@ export const profileService = {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${userId}/profile.${fileExt}`;
-      
+
       const { data, error } = await supabase.storage
         .from('profiles')
         .upload(fileName, file, {
