@@ -1,471 +1,400 @@
-// src/pages/particulier/ProfilView.jsx
-import React, { useState, useRef, useCallback } from 'react';
+/**
+ * ProfilView — Particulier Profile Page
+ * Fetches real data from Supabase `particulier` table.
+ * Falls back to auth.users metadata if no profile row exists.
+ */
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  User, MapPin, Phone, Mail, Camera, Edit2, Save, X, Star,
-  Briefcase, Clock, Award, Shield, Upload, CheckCircle, AlertCircle
+  User, MapPin, Phone, Mail, Edit2, Save, X,
+  Shield, Briefcase, Star, Award, Camera,
+  CheckCircle, AlertCircle, RefreshCw, Loader2
 } from 'lucide-react';
-import UploadPhotoModal from '../shared/components/UploadPhotoModal';
+import { supabase } from '../../core/services/supabaseClient';
+import { profileService } from '../../core/services/profileService';
+import { useAuthStore } from '../../core/store/useAuthStore';
+import toast from 'react-hot-toast';
 
+// ── Skeleton ──────────────────────────────────────────────────────
+const SkeletonField = () => (
+  <div className="h-5 bg-gray-200 rounded-full animate-pulse w-3/4" />
+);
+
+// ── Field component ───────────────────────────────────────────────
+const Field = ({ label, value, icon: Icon, editing, name, type = 'text', onChange, loading }) => (
+  <div>
+    <label className="block text-xs font-bold text-[#1A3A5C]/60 uppercase tracking-wide mb-1.5">
+      {label}
+    </label>
+    {loading ? (
+      <SkeletonField />
+    ) : editing ? (
+      <input
+        type={type}
+        name={name}
+        defaultValue={value ?? ''}
+        onChange={onChange}
+        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-[#1A3A5C] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30 focus:border-[#FF6B35] transition-all bg-white"
+      />
+    ) : (
+      <div className="flex items-center gap-2 text-sm text-[#1A3A5C]">
+        {Icon && <Icon size={14} className="text-[#FF6B35] shrink-0" />}
+        <span className={value ? 'font-medium' : 'text-gray-400 italic'}>
+          {value || 'Non renseigné'}
+        </span>
+      </div>
+    )}
+  </div>
+);
+
+// ── Tab config ────────────────────────────────────────────────────
+const TABS = [
+  { id: 'informations', label: 'Informations', icon: User },
+  { id: 'securite',     label: 'Sécurité',     icon: Shield },
+  { id: 'statistiques', label: 'Statistiques', icon: Star },
+];
+
+// ── Main Component ────────────────────────────────────────────────
 export default function ProfilView() {
-  const [isEditing, setIsEditing] = useState(false);
-  const [showPhotoModal, setShowPhotoModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('informations');
-  
-  const [profile, setProfile] = useState({
-    nom: "Sophie Martin",
-    email: "sophie.martin@email.com",
-    telephone: "06 12 34 56 78",
-    adresse: "15 Rue Hassan II, Casablanca",
-    bio: "Passionnée par la décoration d'intérieur et le design. Je cherche toujours les meilleurs artisans pour mes projets.",
-    photoProfil: null,
-    numeroCIN: "",
-    carteCINRecto: null,
-    carteCINVerso: null,
-    preferences: {
-      notifications: true,
-      newsletter: false,
-      langue: "français"
-    },
-    statistiques: {
-      missionsCompletees: 12,
-      artisansFavoris: 8,
-      avisDonnes: 15
+  const { user: authUser } = useAuthStore();
+  const [activeTab,  setActiveTab]  = useState('informations');
+  const [isEditing,  setIsEditing]  = useState(false);
+  const [loading,    setLoading]    = useState(true);
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState(null);
+  const [profile,    setProfile]    = useState(null);
+  const [editData,   setEditData]   = useState({});
+
+  /* ── Fetch profile from Supabase ──────────────────────────────── */
+  const fetchProfile = useCallback(async () => {
+    if (!authUser) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await profileService.getUserProfile(authUser.id);
+
+      if (result) {
+        setProfile(result.data);
+        setEditData(result.data);
+      } else {
+        // Fall back to auth user metadata
+        const fallback = {
+          nom:       authUser.name ?? '',
+          prenom:    '',
+          email:     authUser.email ?? '',
+          telephone: '',
+          ville:     '',
+          codePostal:'',
+          cin:       '',
+          sexe:      '',
+        };
+        setProfile(fallback);
+        setEditData(fallback);
+      }
+    } catch (err) {
+      setError(err.message ?? 'Impossible de charger le profil');
+    } finally {
+      setLoading(false);
     }
-  });
+  }, [authUser]);
 
-  const handlePhotoUpload = () => {
-    setShowPhotoModal(true);
+  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+
+  /* ── Handle field changes during edit ─────────────────────────── */
+  const handleChange = (e) => {
+    setEditData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handlePhotoSuccess = (file) => {
-    setProfile({
-      ...profile,
-      photoProfil: file
-    });
-    setShowPhotoModal(false);
+  /* ── Save to Supabase ─────────────────────────────────────────── */
+  const handleSave = async () => {
+    if (!authUser) return;
+    setSaving(true);
+    try {
+      await profileService.updateParticulierProfile(authUser.id, editData);
+      setProfile(editData);
+      setIsEditing(false);
+      toast.success('Profil mis à jour avec succès !');
+    } catch (err) {
+      toast.error(err.message ?? 'Erreur lors de la sauvegarde');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const tabs = [
-    { id: 'informations', label: 'Informations', icon: User },
-    { id: 'securite', label: 'Sécurité', icon: Shield },
-    { id: 'preferences', label: 'Préférences', icon: Briefcase },
-    { id: 'statistiques', label: 'Statistiques', icon: Star }
-  ];
+  const handleCancel = () => {
+    setEditData(profile ?? {});
+    setIsEditing(false);
+  };
+
+  const fullName = profile
+    ? `${profile.prenom ?? ''} ${profile.nom ?? ''}`.trim() || profile.email
+    : authUser?.email ?? '';
+
+  const initials = fullName.slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Mon Profil</h1>
-              <p className="text-gray-600 mt-1">Gérez vos informations personnelles</p>
-            </div>
-            {!isEditing ? (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Edit2 className="h-4 w-4" />
-                <span>Modifier</span>
-              </button>
-            ) : (
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="flex items-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>Enregistrer</span>
-                </button>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="flex items-center space-x-2 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                  <span>Annuler</span>
-                </button>
-              </div>
-            )}
-          </div>
+    <div className="space-y-6">
+      {/* Page header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1A3A5C]">Mon Profil</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Gérez vos informations personnelles</p>
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar with tabs */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <nav className="space-y-2">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
-                      activeTab === tab.id
-                        ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <tab.icon size={18} />
-                    <span>{tab.label}</span>
-                  </button>
-                ))}
-              </nav>
-            </div>
-          </div>
-
-          {/* Main content */}
-          <div className="lg:col-span-3">
-            <AnimatePresence mode="wait">
-              {activeTab === 'informations' && (
-                <motion.div
-                  key="informations"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
-                >
-                  {/* Photo de profil */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Photo de profil</h3>
-                    <div className="flex items-center space-x-6">
-                      <div className="relative">
-                        <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center">
-                          {profile.photoProfil ? (
-                            <img src={profile.photoProfil} alt="Photo" className="w-full h-full rounded-full object-cover" />
-                          ) : (
-                            <User className="h-12 w-12 text-gray-400" />
-                          )}
-                        </div>
-                        {isEditing && (
-                          <button
-                            onClick={handlePhotoUpload}
-                            className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
-                          >
-                            <Camera className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">Une photo professionnelle aide les artisans à vous identifier facilement.</p>
-                        <div className="flex items-center space-x-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span className="text-gray-700">Format JPG, PNG ou WebP</span>
-                        </div>
-                        <div className="flex items-center space-x-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span className="text-gray-700">Taille maximale 2MB</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Informations personnelles */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Informations personnelles</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Nom complet</label>
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={profile.nom}
-                              onChange={(e) => setProfile({...profile, nom: e.target.value})}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          ) : (
-                            <p className="text-gray-900">{profile.nom}</p>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                          {isEditing ? (
-                            <input
-                              type="email"
-                              value={profile.email}
-                              onChange={(e) => setProfile({...profile, email: e.target.value})}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          ) : (
-                            <div className="flex items-center space-x-2">
-                              <Mail className="h-4 w-4 text-gray-400" />
-                              <span className="text-gray-900">{profile.email}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone</label>
-                          {isEditing ? (
-                            <input
-                              type="tel"
-                              value={profile.telephone}
-                              onChange={(e) => setProfile({...profile, telephone: e.target.value})}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          ) : (
-                            <div className="flex items-center space-x-2">
-                              <Phone className="h-4 w-4 text-gray-400" />
-                              <span className="text-gray-900">{profile.telephone}</span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Adresse</label>
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={profile.adresse}
-                              onChange={(e) => setProfile({...profile, adresse: e.target.value})}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          ) : (
-                            <div className="flex items-center space-x-2">
-                              <MapPin className="h-4 w-4 text-gray-400" />
-                              <span className="text-gray-900">{profile.adresse}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bio */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Biographie</h3>
-                    {isEditing ? (
-                      <textarea
-                        value={profile.bio}
-                        onChange={(e) => setProfile({...profile, bio: e.target.value})}
-                        rows={4}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                        placeholder="Parlez-nous de vous..."
-                      />
-                    ) : (
-                      <p className="text-gray-700 leading-relaxed">{profile.bio}</p>
-                    )}
-                  </div>
-
-                  {/* Carte d'identité */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Carte d'identité</h3>
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Numéro CIN</label>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={profile.numeroCIN}
-                            onChange={(e) => setProfile({...profile, numeroCIN: e.target.value})}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="AB123456"
-                          />
-                        ) : (
-                          <p className="text-gray-900">{profile.numeroCIN || 'Non renseigné'}</p>
-                        )}
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Recto</label>
-                          {isEditing ? (
-                            <UploadPhotoModal
-                              onUploadSuccess={(file) => setProfile({...profile, carteCINRecto: file})}
-                              acceptedFileTypes={['image/jpeg', 'image/png', 'application/pdf']}
-                              maxFileSize={5 * 1024 * 1024}
-                            />
-                          ) : (
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                              {profile.carteCINRecto ? (
-                                <p className="text-sm text-green-600">✓ Fichier uploadé</p>
-                              ) : (
-                                <p className="text-sm text-gray-500">Aucun fichier</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Verso</label>
-                          {isEditing ? (
-                            <UploadPhotoModal
-                              onUploadSuccess={(file) => setProfile({...profile, carteCINVerso: file})}
-                              acceptedFileTypes={['image/jpeg', 'image/png', 'application/pdf']}
-                              maxFileSize={5 * 1024 * 1024}
-                            />
-                          ) : (
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                              {profile.carteCINVerso ? (
-                                <p className="text-sm text-green-600">✓ Fichier uploadé</p>
-                              ) : (
-                                <p className="text-sm text-gray-500">Aucun fichier</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'securite' && (
-                <motion.div
-                  key="securite"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
-                >
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Sécurité du compte</h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-900">Mot de passe</p>
-                          <p className="text-sm text-gray-600">Dernière modification: il y a 30 jours</p>
-                        </div>
-                        <button className="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium">
-                          Modifier
-                        </button>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-900">Authentification à deux facteurs</p>
-                          <p className="text-sm text-gray-600">Ajoutez une couche de sécurité</p>
-                        </div>
-                        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                          Activer
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'preferences' && (
-                <motion.div
-                  key="preferences"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
-                >
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Préférences</h3>
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-gray-900">Notifications par email</p>
-                          <p className="text-sm text-gray-600">Recevoir des alertes sur les missions</p>
-                        </div>
-                        <button
-                          onClick={() => setProfile({
-                            ...profile,
-                            preferences: {...profile.preferences, notifications: !profile.preferences.notifications}
-                          })}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            profile.preferences.notifications ? 'bg-blue-600' : 'bg-gray-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            profile.preferences.notifications ? 'translate-x-6' : 'translate-x-1'
-                          }`} />
-                        </button>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-gray-900">Newsletter</p>
-                          <p className="text-sm text-gray-600">Actualités et conseils</p>
-                        </div>
-                        <button
-                          onClick={() => setProfile({
-                            ...profile,
-                            preferences: {...profile.preferences, newsletter: !profile.preferences.newsletter}
-                          })}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            profile.preferences.newsletter ? 'bg-blue-600' : 'bg-gray-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            profile.preferences.newsletter ? 'translate-x-6' : 'translate-x-1'
-                          }`} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'statistiques' && (
-                <motion.div
-                  key="statistiques"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Briefcase className="h-6 w-6 text-blue-600" />
-                      </div>
-                      <p className="text-2xl font-bold text-gray-900">{profile.statistiques.missionsCompletees}</p>
-                      <p className="text-sm text-gray-600">Missions complétées</p>
-                    </div>
-                    
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-                      <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Star className="h-6 w-6 text-yellow-600" />
-                      </div>
-                      <p className="text-2xl font-bold text-gray-900">{profile.statistiques.artisansFavoris}</p>
-                      <p className="text-sm text-gray-600">Artisans favoris</p>
-                    </div>
-                    
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
-                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Award className="h-6 w-6 text-green-600" />
-                      </div>
-                      <p className="text-2xl font-bold text-gray-900">{profile.statistiques.avisDonnes}</p>
-                      <p className="text-sm text-gray-600">Avis donnés</p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-
-      {/* Modal Upload Photo */}
-      {showPhotoModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Uploader une photo de profil</h3>
-            <UploadPhotoModal
-              onUploadSuccess={handlePhotoSuccess}
-              acceptedFileTypes={['image/jpeg', 'image/png', 'image/webp']}
-              maxFileSize={2 * 1024 * 1024}
-            />
+        <div className="flex items-center gap-2">
+          {!isEditing ? (
             <button
-              onClick={() => setShowPhotoModal(false)}
-              className="mt-4 w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              onClick={() => setIsEditing(true)}
+              disabled={loading}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#1A3A5C] text-white rounded-xl text-sm font-semibold hover:bg-[#0f2236] transition-colors disabled:opacity-50"
             >
-              Annuler
+              <Edit2 size={15} />
+              Modifier
             </button>
-          </div>
+          ) : (
+            <>
+              <button
+                onClick={handleCancel}
+                className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors"
+              >
+                <X size={14} />
+                Annuler
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#FF6B35] text-white rounded-xl text-sm font-semibold hover:bg-[#e55a25] transition-colors disabled:opacity-50 shadow-sm"
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Enregistrer
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Error state */}
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700">
+          <AlertCircle size={16} className="shrink-0" />
+          <span>{error}</span>
+          <button onClick={fetchProfile} className="ml-auto flex items-center gap-1 font-semibold hover:underline">
+            <RefreshCw size={12} /> Réessayer
+          </button>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+        {/* ── Left: Avatar + Tab nav ──────────────────────────── */}
+        <div className="lg:col-span-1 space-y-4">
+
+          {/* Avatar card */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col items-center text-center shadow-sm">
+            <div className="relative mb-4">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#FF6B35] to-[#FF9A6C] flex items-center justify-center text-white font-bold text-2xl shadow-md">
+                {loading ? <Loader2 size={24} className="animate-spin opacity-60" /> : initials}
+              </div>
+              {isEditing && (
+                <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#1A3A5C] rounded-lg flex items-center justify-center text-white shadow hover:bg-[#0f2236] transition-colors">
+                  <Camera size={12} />
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+              <>
+                <div className="h-4 w-28 bg-gray-200 rounded-full animate-pulse mb-2" />
+                <div className="h-3 w-20 bg-gray-100 rounded-full animate-pulse" />
+              </>
+            ) : (
+              <>
+                <p className="font-bold text-[#1A3A5C] text-base">{fullName || '—'}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{profile?.email}</p>
+                <span className="mt-3 inline-block px-3 py-1 bg-[#FF6B35]/10 text-[#FF6B35] text-xs font-bold rounded-full">
+                  Particulier
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Tab nav */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all border-b border-gray-50 last:border-0 ${
+                  activeTab === tab.id
+                    ? 'bg-[#FF6B35]/8 text-[#FF6B35] border-l-2 border-l-[#FF6B35]'
+                    : 'text-gray-500 hover:text-[#1A3A5C] hover:bg-gray-50'
+                }`}
+              >
+                <tab.icon size={15} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Right: Tab content ───────────────────────────────── */}
+        <div className="lg:col-span-3">
+          <AnimatePresence mode="wait">
+
+            {/* ── Informations ──────────────────────────────────── */}
+            {activeTab === 'informations' && (
+              <motion.div
+                key="informations"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -16 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-5"
+              >
+                {/* Personal info */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h3 className="font-bold text-[#1A3A5C] mb-5 flex items-center gap-2">
+                    <User size={16} className="text-[#FF6B35]" />
+                    Informations personnelles
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <Field label="Prénom" name="prenom" value={isEditing ? editData.prenom : profile?.prenom}
+                      editing={isEditing} onChange={handleChange} loading={loading} />
+                    <Field label="Nom" name="nom" value={isEditing ? editData.nom : profile?.nom}
+                      editing={isEditing} onChange={handleChange} loading={loading} />
+                    <Field label="Email" icon={Mail} name="email" type="email"
+                      value={isEditing ? editData.email : profile?.email}
+                      editing={isEditing} onChange={handleChange} loading={loading} />
+                    <Field label="Téléphone" icon={Phone} name="telephone" type="tel"
+                      value={isEditing ? editData.telephone : profile?.telephone}
+                      editing={isEditing} onChange={handleChange} loading={loading} />
+                    <Field label="Sexe" name="sexe"
+                      value={isEditing ? editData.sexe : profile?.sexe}
+                      editing={isEditing} onChange={handleChange} loading={loading} />
+                    <Field label="CIN" name="cin"
+                      value={isEditing ? editData.cin : profile?.cin}
+                      editing={isEditing} onChange={handleChange} loading={loading} />
+                  </div>
+                </div>
+
+                {/* Location info */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <h3 className="font-bold text-[#1A3A5C] mb-5 flex items-center gap-2">
+                    <MapPin size={16} className="text-[#FF6B35]" />
+                    Localisation
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <Field label="Ville" icon={MapPin} name="ville"
+                      value={isEditing ? editData.ville : profile?.ville}
+                      editing={isEditing} onChange={handleChange} loading={loading} />
+                    <Field label="Code postal" name="codePostal"
+                      value={isEditing ? editData.codePostal : profile?.codePostal}
+                      editing={isEditing} onChange={handleChange} loading={loading} />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Sécurité ────────────────────────────────────────── */}
+            {activeTab === 'securite' && (
+              <motion.div
+                key="securite"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -16 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                  <h3 className="font-bold text-[#1A3A5C] mb-5 flex items-center gap-2">
+                    <Shield size={16} className="text-[#FF6B35]" />
+                    Sécurité du compte
+                  </h3>
+
+                  {[
+                    {
+                      title: 'Mot de passe',
+                      sub: 'Modifier votre mot de passe',
+                      action: 'Modifier',
+                      onClick: async () => {
+                        const { error } = await supabase.auth.resetPasswordForEmail(
+                          authUser?.email ?? '', { redirectTo: window.location.origin }
+                        );
+                        if (!error) toast.success('Email de réinitialisation envoyé !');
+                        else toast.error('Erreur: ' + error.message);
+                      },
+                      style: 'border border-[#1A3A5C] text-[#1A3A5C] hover:bg-[#1A3A5C] hover:text-white',
+                    },
+                    {
+                      title: 'Authentification à deux facteurs',
+                      sub: 'Ajoutez une couche de sécurité supplémentaire',
+                      action: 'Activer',
+                      onClick: () => toast('Bientôt disponible', { icon: '🔒' }),
+                      style: 'bg-[#FF6B35] text-white hover:bg-[#e55a25]',
+                    },
+                  ].map(item => (
+                    <div key={item.title} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                      <div>
+                        <p className="font-semibold text-[#1A3A5C] text-sm">{item.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{item.sub}</p>
+                      </div>
+                      <button
+                        onClick={item.onClick}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${item.style}`}
+                      >
+                        {item.action}
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Account info */}
+                  <div className="p-4 bg-[#1A3A5C]/4 rounded-xl">
+                    <p className="text-xs font-bold text-[#1A3A5C] mb-2">Compte connecté</p>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <p className="text-xs text-gray-600">{authUser?.email}</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Statistiques ─────────────────────────────────────── */}
+            {activeTab === 'statistiques' && (
+              <motion.div
+                key="statistiques"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -16 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-5"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { icon: Briefcase, label: 'Demandes envoyées', value: '—', color: 'bg-[#FF6B35]/10 text-[#FF6B35]' },
+                    { icon: Star,      label: 'Artisans contactés', value: '—', color: 'bg-amber-100 text-amber-600'    },
+                    { icon: Award,     label: 'Missions terminées',  value: '—', color: 'bg-emerald-100 text-emerald-600'},
+                  ].map(stat => (
+                    <div key={stat.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
+                      <div className={`w-12 h-12 ${stat.color} rounded-2xl flex items-center justify-center mx-auto mb-3`}>
+                        <stat.icon size={20} />
+                      </div>
+                      <p className="text-2xl font-bold text-[#1A3A5C]">{stat.value}</p>
+                      <p className="text-xs text-gray-500 mt-1">{stat.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                  <div className="flex items-center gap-2 text-gray-400 text-sm">
+                    <AlertCircle size={14} />
+                    Les statistiques seront disponibles prochainement.
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,604 +1,676 @@
-// src/pages/public/SearchArtisan.jsx
-import React, { useState, useEffect } from 'react';
+// src/shared/pages/SearchArtisan.jsx
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, MapPin, Filter, Star, Phone, MessageSquare, ChevronRight, X, Clock, CheckCircle, Award, TrendingUp, Send } from 'lucide-react';
-import { SERVICES_ARTISAN } from '../../core/constants/services';
+import {
+  Search, MapPin, Filter, Star, Clock, CheckCircle,
+  Award, Send, X, ChevronDown, User, Briefcase, AlertCircle,
+  SlidersHorizontal, RefreshCw
+} from 'lucide-react';
+import { supabase } from '../../core/services/supabaseClient';
+import { SERVICES_ARTISAN, VILLES_MAROC } from '../../core/constants/services';
+import toast from 'react-hot-toast';
 
-const artisansData = [
-  {
-    id: 1,
-    name: 'Ahmed Mansouri',
-    metier: 'Plombier',
-    ville: 'Casablanca',
-    rating: 4.8,
-    nbAvis: 156,
-    tarifHoraire: 150,
-    experience: 10,
-    disponibilite: 'Disponible',
-    image: 'https://images.unsplash.com/photo-1540324155974-7523202daa3f?w=400',
-    verified: true,
-    specialites: ['Dépannage', 'Installation', 'Chauffage'],
-  },
-  {
-    id: 2,
-    name: 'Youssef Alami',
-    metier: 'Électricien',
-    ville: 'Rabat',
-    rating: 4.9,
-    nbAvis: 89,
-    tarifHoraire: 200,
-    experience: 8,
-    disponibilite: 'Disponible',
-    image: 'https://images.unsplash.com/photo-1558222218-b7b54eede3f3?w=400',
-    verified: true,
-    specialites: ['Câblage', 'Tableau électrique', 'Éclairage'],
-  },
-  {
-    id: 3,
-    name: 'Amine Bennani',
-    metier: 'Peintre',
-    ville: 'Casablanca',
-    rating: 4.7,
-    nbAvis: 67,
-    tarifHoraire: 250,
-    experience: 12,
-    disponibilite: 'Occupé',
-    image: 'https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=400',
-    verified: false,
-    specialites: ['Peinture intérieure', 'Finition', 'Décoration'],
-  },
-  {
-    id: 4,
-    name: 'Sarah Tahiri',
-    metier: 'Peintre',
-    ville: 'Marrakech',
-    rating: 4.6,
-    nbAvis: 45,
-    tarifHoraire: 100,
-    experience: 6,
-    disponibilite: 'Disponible',
-    image: 'https://images.unsplash.com/photo-1589710751893-f9a6770ad71b?w=400',
-    verified: true,
-    specialites: ['Peinture intérieure', 'Finition', 'Décoration'],
-  },
-  {
-    id: 5,
-    name: 'Omar Idrissi',
-    metier: 'Technicien en électroménager et climatisation',
-    ville: 'Tanger',
-    rating: 4.5,
-    nbAvis: 34,
-    tarifHoraire: 180,
-    experience: 15,
-    disponibilite: 'Disponible',
-    image: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400',
-    verified: false,
-    specialites: ['Installation', 'Maintenance', 'Dépannage'],
-  },
-  {
-    id: 6,
-    name: 'Hassan Zemmouri',
-    metier: 'Plombier',
-    ville: 'Fès',
-    rating: 4.8,
-    nbAvis: 112,
-    tarifHoraire: 180,
-    experience: 9,
-    disponibilite: 'Disponible',
-    image: 'https://images.unsplash.com/photo-1595841055318-62400b65f242?w=400',
-    verified: true,
-    specialites: ['Plomberie générale', 'Chauffage', 'Dépannage'],
-  },
-  {
-    id: 7,
-    name: 'Fatima Zahra',
-    metier: 'Femme de ménage',
-    ville: 'Casablanca',
-    rating: 4.9,
-    nbAvis: 234,
-    tarifHoraire: 80,
-    experience: 5,
-    disponibilite: 'Disponible',
-    image: 'https://images.unsplash.com/photo-1580489938304-3c4a6b8c3b3?w=400',
-    verified: true,
-    specialites: ['Ménage complet', 'Repassage', 'Cuisine'],
-  },
-  {
-    id: 8,
-    name: 'Karim El Ouardi',
-    metier: 'Technicien Climatisation',
-    ville: 'Marrakech',
-    rating: 4.7,
-    nbAvis: 78,
-    tarifHoraire: 220,
-    experience: 7,
-    disponibilite: 'Disponible',
-    image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400',
-    verified: true,
-    specialites: ['Climatisation', 'Chauffage', 'Ventilation'],
-  }
-];
+// ─── Constants ────────────────────────────────────────────────────
+const METIERS   = ['Tous', ...SERVICES_ARTISAN];
+const VILLES    = ['Toutes', ...VILLES_MAROC];
+const TRI_OPT   = ['Pertinence', "Plus d'expérience", 'Disponibles en premier'];
 
-const metiers = ['Tous', ...SERVICES_ARTISAN];
-const villes = ['Toutes', 'Casablanca', 'Rabat', 'Marrakech', 'Fès', 'Tanger'];
-const triOptions = ['Pertinence', 'Mieux notés', 'Prix croissant', 'Prix décroissant', 'Plus d\'expérience'];
+// ─── Skeleton Card ─────────────────────────────────────────────────
+const SkeletonCard = () => (
+  <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm animate-pulse">
+    <div className="h-44 bg-gradient-to-br from-gray-100 to-gray-200" />
+    <div className="p-5 space-y-3">
+      <div className="flex gap-3 items-center">
+        <div className="w-12 h-12 rounded-full bg-gray-200 shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-gray-200 rounded-full w-3/4" />
+          <div className="h-3 bg-gray-100 rounded-full w-1/2" />
+        </div>
+      </div>
+      <div className="h-3 bg-gray-100 rounded-full w-full" />
+      <div className="h-3 bg-gray-100 rounded-full w-4/5" />
+      <div className="flex gap-2 pt-1">
+        <div className="h-8 bg-gray-100 rounded-xl flex-1" />
+        <div className="h-8 bg-gray-100 rounded-xl flex-1" />
+      </div>
+    </div>
+  </div>
+);
 
-const SearchArtisan = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMetier, setSelectedMetier] = useState('Tous');
-  const [selectedVille, setSelectedVille] = useState('Toutes');
-  const [tri, setTri] = useState('Pertinence');
-  const [showFilters, setShowFilters] = useState(false);
-  const [filteredArtisans, setFilteredArtisans] = useState(artisansData);
-  const [showDemandeModal, setShowDemandeModal] = useState(false);
-  const [selectedArtisan, setSelectedArtisan] = useState(null);
+// ─── Artisan Card ──────────────────────────────────────────────────
+const ArtisanCard = ({ artisan, index, onContact }) => {
+  const fullName = `${artisan.prenom_artisan ?? ''} ${artisan.nom_artisan ?? ''}`.trim();
+  const isAvailable = artisan.disponibilite === true;
+  const initials = `${(artisan.prenom_artisan ?? 'A')[0]}${(artisan.nom_artisan ?? 'A')[0]}`.toUpperCase();
 
-  useEffect(() => {
-    let filtered = artisansData.filter(artisan => {
-      const matchesSearch = artisan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           artisan.metier.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesMetier = selectedMetier === 'Tous' || artisan.metier === selectedMetier;
-      const matchesVille = selectedVille === 'Toutes' || artisan.ville === selectedVille;
-      
-      return matchesSearch && matchesMetier && matchesVille;
-    });
-
-    // Tri
-    switch (tri) {
-      case 'Mieux notés':
-        filtered.sort((a, b) => b.rating - a.rating);
-        break;
-      case 'Prix croissant':
-        filtered.sort((a, b) => a.tarifHoraire - b.tarifHoraire);
-        break;
-      case 'Prix décroissant':
-        filtered.sort((a, b) => b.tarifHoraire - a.tarifHoraire);
-        break;
-      case 'Plus d\'expérience':
-        filtered.sort((a, b) => b.experience - a.experience);
-        break;
-      default:
-        // Pertinence - tri par défaut
-        break;
-    }
-
-    setFilteredArtisans(filtered);
-  }, [searchTerm, selectedMetier, selectedVille, tri]);
-
-  const handleOpenDemandeModal = (artisan) => {
-    setSelectedArtisan(artisan);
-    setShowDemandeModal(true);
-  };
-
-  const handleCloseDemandeModal = () => {
-    setShowDemandeModal(false);
-    setSelectedArtisan(null);
-  };
-
-  const handleEnvoyerDemande = (e) => {
-    e.preventDefault();
-    
-    // Récupérer les données du formulaire
-    const formData = new FormData(e.target);
-    const description = formData.get('description');
-    const ville = formData.get('ville');
-    const codePostal = formData.get('codePostal');
-    const urgence = formData.get('urgence');
-
-    // Créer une nouvelle demande
-    const nouvelleDemande = {
-      id: Date.now(),
-      client: "Client Actuel",
-      service: selectedArtisan.metier,
-      description: description,
-      adresse: `${ville} - ${codePostal}`,
-      telephone: "À définir",
-      email: "À définir",
-      date: new Date().toISOString().split('T')[0],
-      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      urgence: urgence,
-      statut: "nouveau",
-      prix: "À estimer",
-      note: 0,
-      photos: 0,
-      artisanId: selectedArtisan.id,
-      artisanName: selectedArtisan.name,
-      artisanMetier: selectedArtisan.metier,
-      artisanVille: selectedArtisan.ville,
-      artisanImage: selectedArtisan.image
-    };
-
-    // Sauvegarder la demande dans localStorage
-    const demandesExistantes = JSON.parse(localStorage.getItem('demandesArtisans') || '[]');
-    demandesExistantes.push(nouvelleDemande);
-    localStorage.setItem('demandesArtisans', JSON.stringify(demandesExistantes));
-
-    alert(`✅ Demande envoyée avec succès à ${selectedArtisan.name} !\n\nVotre demande a été sauvegardée et sera visible dans votre dashboard.`);
-    handleCloseDemandeModal();
-  };
-
-  const ArtisanCard = ({ artisan }) => (
+  return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300"
+      transition={{ duration: 0.35, delay: index * 0.06, ease: [0.16, 1, 0.3, 1] }}
+      className="group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
     >
-      {/* Header avec image et statut */}
-      <div className="relative">
-        <img 
-          src={artisan.image} 
-          alt={artisan.name} 
-          className="w-full h-48 object-cover" 
-        />
-        <div className="absolute top-4 left-4">
-          <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-            artisan.disponibilite === 'Disponible' 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-yellow-100 text-yellow-800'
+      {/* Banner */}
+      <div className="relative h-28 bg-gradient-to-br from-[#1A3A5C] to-[#0f2236] overflow-hidden">
+        {/* decorative circles */}
+        <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-[#FF6B35]/20" />
+        <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-white/5" />
+
+        {/* Disponibilité badge */}
+        <div className="absolute top-3 right-3">
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+            isAvailable
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-amber-100 text-amber-700'
           }`}>
-            {artisan.disponibilite}
+            <span className={`w-1.5 h-1.5 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+            {isAvailable ? 'Disponible' : 'Occupé'}
           </span>
         </div>
-        {artisan.verified && (
-          <div className="absolute top-4 right-4">
-            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-              <CheckCircle size={16} className="text-white" />
+
+        {/* Validation badge */}
+        {artisan.statut_validation && (
+          <div className="absolute top-3 left-3">
+            <div className="w-7 h-7 bg-[#FF6B35] rounded-full flex items-center justify-center shadow-md">
+              <CheckCircle size={14} className="text-white" />
             </div>
           </div>
         )}
       </div>
 
-      {/* Contenu */}
-      <div className="p-6">
-        {/* Nom et métier */}
-        <div className="flex justify-between items-start mb-3">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{artisan.name}</h3>
-            <p className="text-sm text-gray-600">{artisan.metier}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-gray-900">{artisan.tarifHoraire} DH</p>
-            <p className="text-xs text-gray-500">/heure</p>
-          </div>
-        </div>
-
-        {/* Localisation et expérience */}
-        <div className="flex items-center gap-4 mb-3 text-sm text-gray-600">
-          <div className="flex items-center gap-1">
-            <MapPin size={16} className="text-blue-500" />
-            <span>{artisan.ville}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Clock size={16} className="text-blue-500" />
-            <span>{artisan.experience} ans d'expérience</span>
-          </div>
-        </div>
-
-        {/* Rating et missions */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center">
-              <Star className="h-4 w-4 text-yellow-400 fill-current" />
-              <span className="text-sm font-medium text-gray-700 ml-1">{artisan.rating}</span>
-            </div>
-            <span className="text-sm text-gray-500">({artisan.nbAvis} avis)</span>
-          </div>
-          <div className="flex items-center gap-1 text-sm text-gray-600">
-            <Award size={16} className="text-blue-500" />
-            <span>{artisan.missionsCompletees} missions</span>
-          </div>
-        </div>
-
-        {/* Spécialités */}
-        <div className="mb-4">
-          <p className="text-xs font-medium text-gray-700 mb-2">Spécialités:</p>
-          <div className="flex flex-wrap gap-2">
-            {artisan.specialites.slice(0, 3).map((spec, index) => (
-              <span key={index} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
-                {spec}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2">
-          <button 
-            onClick={() => handleOpenDemandeModal(artisan)}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm"
+      {/* Avatar — overlaps banner */}
+      <div className="px-5 -mt-8 pb-0">
+        <div className="relative w-16 h-16 rounded-2xl border-4 border-white shadow-md overflow-hidden bg-gradient-to-br from-[#FF6B35] to-[#FF9A6C]">
+          {artisan.photo_profil ? (
+            <img
+              src={artisan.photo_profil}
+              alt={fullName}
+              className="w-full h-full object-cover"
+              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+            />
+          ) : null}
+          <div
+            className="w-full h-full flex items-center justify-center text-white font-bold text-lg"
+            style={{ display: artisan.photo_profil ? 'none' : 'flex' }}
           >
-            <Send size={16} />
-            <span>Envoyer demande</span>
-          </button>
+            {initials}
+          </div>
         </div>
+      </div>
+
+      {/* Content */}
+      <div className="px-5 pt-3 pb-5">
+        {/* Name + trade */}
+        <div className="mb-3">
+          <h3 className="text-[#1A3A5C] font-bold text-base leading-tight">{fullName}</h3>
+          <div className="flex items-center gap-1.5 mt-1">
+            <Briefcase size={12} className="text-[#FF6B35]" />
+            <span className="text-xs text-gray-500 font-medium">{artisan.metier ?? '—'}</span>
+          </div>
+        </div>
+
+        {/* Meta row */}
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          {artisan.ville && (
+            <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+              <MapPin size={12} className="text-[#1A3A5C]" />
+              {artisan.ville}
+            </span>
+          )}
+          {artisan.annee_experience != null && (
+            <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+              <Clock size={12} className="text-[#1A3A5C]" />
+              {artisan.annee_experience} ans d'exp.
+            </span>
+          )}
+        </div>
+
+        {/* Description */}
+        {artisan.description && (
+          <p className="text-xs text-gray-500 leading-relaxed mb-4 line-clamp-2">
+            {artisan.description}
+          </p>
+        )}
+
+        {/* CTA */}
+        <button
+          onClick={() => onContact(artisan)}
+          disabled={!isAvailable}
+          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+            isAvailable
+              ? 'bg-[#FF6B35] hover:bg-[#e55a25] text-white shadow-sm hover:shadow-md active:scale-95'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          }`}
+        >
+          <Send size={14} />
+          {isAvailable ? 'Envoyer une demande' : 'Non disponible'}
+        </button>
       </div>
     </motion.div>
   );
+};
+
+// ─── Empty State ────────────────────────────────────────────────────
+const EmptyState = ({ onReset }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.95 }}
+    animate={{ opacity: 1, scale: 1 }}
+    className="flex flex-col items-center justify-center py-24 text-center"
+  >
+    <div className="w-24 h-24 rounded-full bg-[#1A3A5C]/6 flex items-center justify-center mb-6">
+      <Search size={36} className="text-[#1A3A5C]/40" />
+    </div>
+    <h3 className="text-xl font-bold text-[#1A3A5C] mb-2">Aucun artisan trouvé</h3>
+    <p className="text-gray-500 max-w-sm mb-8 text-sm leading-relaxed">
+      Essayez de modifier vos filtres ou d'élargir votre recherche pour trouver des artisans disponibles dans votre région.
+    </p>
+    <button
+      onClick={onReset}
+      className="inline-flex items-center gap-2 px-6 py-3 bg-[#FF6B35] text-white rounded-xl font-semibold hover:bg-[#e55a25] transition-colors shadow-sm"
+    >
+      <RefreshCw size={16} />
+      Réinitialiser la recherche
+    </button>
+  </motion.div>
+);
+
+// ─── Error State ───────────────────────────────────────────────────
+const ErrorState = ({ message, onRetry }) => (
+  <div className="flex flex-col items-center justify-center py-20 text-center">
+    <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mb-5">
+      <AlertCircle size={32} className="text-red-400" />
+    </div>
+    <h3 className="text-lg font-bold text-[#1A3A5C] mb-2">Erreur de chargement</h3>
+    <p className="text-gray-500 text-sm max-w-sm mb-6">{message}</p>
+    <button
+      onClick={onRetry}
+      className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1A3A5C] text-white rounded-xl font-semibold hover:bg-[#0f2236] transition-colors"
+    >
+      <RefreshCw size={15} />
+      Réessayer
+    </button>
+  </div>
+);
+
+// ─── Demande Modal ──────────────────────────────────────────────────
+const DemandeModal = ({ artisan, onClose, onSubmit }) => {
+  const fullName = `${artisan.prenom_artisan ?? ''} ${artisan.nom_artisan ?? ''}`.trim();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">
-              Trouvez l'artisan <span className="text-blue-600">parfait</span> pour votre projet
-            </h1>
-            <p className="text-gray-600 max-w-2xl mx-auto">
-              Explorez notre réseau de professionnels vérifiés et qualifiés dans toute la région
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.92, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.92, opacity: 0, y: 20 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-bold text-[#1A3A5C]">Envoyer une demande</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              À <span className="font-semibold text-[#FF6B35]">{fullName}</span>
+              {artisan.metier && ` · ${artisan.metier}`}
             </p>
           </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+          >
+            <X size={16} className="text-gray-500" />
+          </button>
+        </div>
 
-          {/* Barre de recherche principale */}
-          <div className="max-w-3xl mx-auto">
-            <div className="flex gap-3">
-              <div className="flex-1 relative">
-                <Search 
-                  size={20} 
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
-                />
-                <input
-                  type="text"
-                  placeholder="Rechercher par nom ou métier..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
-              >
-                <Filter size={20} />
-                <span className="hidden sm:inline">Filtres</span>
-              </button>
+        {/* Form */}
+        <form onSubmit={onSubmit} className="px-6 py-5 space-y-5">
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-semibold text-[#1A3A5C] mb-2">
+              Description du problème <span className="text-[#FF6B35]">*</span>
+            </label>
+            <textarea
+              name="description"
+              placeholder="Décrivez précisément le problème à résoudre..."
+              rows={4}
+              required
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-[#1A3A5C] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40 focus:border-[#FF6B35] transition-all resize-none"
+            />
+          </div>
+
+          {/* Ville + Code postal */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-[#1A3A5C] mb-2">
+                Ville <span className="text-[#FF6B35]">*</span>
+              </label>
+              <input
+                type="text"
+                name="ville"
+                placeholder="Ex: Casablanca"
+                required
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-[#1A3A5C] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40 focus:border-[#FF6B35] transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#1A3A5C] mb-2">
+                Code postal <span className="text-[#FF6B35]">*</span>
+              </label>
+              <input
+                type="text"
+                name="codePostal"
+                placeholder="Ex: 20000"
+                required
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-[#1A3A5C] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40 focus:border-[#FF6B35] transition-all"
+              />
             </div>
           </div>
+
+          {/* Urgence */}
+          <div>
+            <label className="block text-sm font-semibold text-[#1A3A5C] mb-2">
+              Niveau d'urgence
+            </label>
+            <div className="relative">
+              <select
+                name="urgence"
+                required
+                className="w-full appearance-none border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-[#1A3A5C] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40 focus:border-[#FF6B35] transition-all bg-white"
+              >
+                <option value="basse">🟢 Basse — pas d'urgence</option>
+                <option value="moyenne">🟡 Moyenne — dans la semaine</option>
+                <option value="haute">🔴 Haute — urgent</option>
+              </select>
+              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2.5 bg-[#FF6B35] hover:bg-[#e55a25] text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
+            >
+              <Send size={14} />
+              Envoyer
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// ─── Main Component ─────────────────────────────────────────────────
+const SearchArtisan = () => {
+  // ── Data state
+  const [artisans, setArtisans]               = useState([]);
+  const [loading, setLoading]                 = useState(true);
+  const [error, setError]                     = useState(null);
+
+  // ── Filter state
+  const [searchTerm, setSearchTerm]           = useState('');
+  const [selectedMetier, setSelectedMetier]   = useState('Tous');
+  const [selectedVille, setSelectedVille]     = useState('Toutes');
+  const [selectedTri, setSelectedTri]         = useState('Pertinence');
+  const [showFilters, setShowFilters]         = useState(false);
+
+  // ── Modal state
+  const [modalArtisan, setModalArtisan]       = useState(null);
+
+  // ── Fetch from Supabase ─────────────────────────────────────────
+  const fetchArtisans = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: sbError } = await supabase
+        .from('artisan')
+        .select(`
+          id_artisan,
+          nom_artisan,
+          prenom_artisan,
+          photo_profil,
+          metier,
+          ville,
+          description,
+          annee_experience,
+          disponibilite,
+          statut_validation
+        `)
+        .order('created_at', { ascending: false });
+
+      if (sbError) throw sbError;
+      setArtisans(data ?? []);
+    } catch (err) {
+      console.error('Supabase fetch error:', err);
+      setError(err.message ?? 'Erreur lors du chargement des artisans.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchArtisans(); }, [fetchArtisans]);
+
+  // ── Filter + Sort (client-side) ─────────────────────────────────
+  const filtered = React.useMemo(() => {
+    let result = [...artisans];
+
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(a =>
+        `${a.prenom_artisan} ${a.nom_artisan}`.toLowerCase().includes(q) ||
+        (a.metier ?? '').toLowerCase().includes(q) ||
+        (a.ville ?? '').toLowerCase().includes(q)
+      );
+    }
+
+    if (selectedMetier !== 'Tous') {
+      result = result.filter(a => a.metier === selectedMetier);
+    }
+
+    if (selectedVille !== 'Toutes') {
+      result = result.filter(a => a.ville === selectedVille);
+    }
+
+    switch (selectedTri) {
+      case "Plus d'expérience":
+        result.sort((a, b) => (b.annee_experience ?? 0) - (a.annee_experience ?? 0));
+        break;
+      case 'Disponibles en premier':
+        result.sort((a, b) => (b.disponibilite ? 1 : 0) - (a.disponibilite ? 1 : 0));
+        break;
+      default:
+        break;
+    }
+
+    return result;
+  }, [artisans, searchTerm, selectedMetier, selectedVille, selectedTri]);
+
+  // ── Handlers ────────────────────────────────────────────────────
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSelectedMetier('Tous');
+    setSelectedVille('Toutes');
+    setSelectedTri('Pertinence');
+  };
+
+  const handleContact = (artisan) => setModalArtisan(artisan);
+  const handleCloseModal = () => setModalArtisan(null);
+
+  const handleEnvoyerDemande = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const fullName = `${modalArtisan.prenom_artisan ?? ''} ${modalArtisan.nom_artisan ?? ''}`.trim();
+
+    const nouvelleDemande = {
+      id: Date.now(),
+      client: 'Client Actuel',
+      service: modalArtisan.metier,
+      description: formData.get('description'),
+      adresse: `${formData.get('ville')} - ${formData.get('codePostal')}`,
+      telephone: 'À définir',
+      email: 'À définir',
+      date: new Date().toISOString().split('T')[0],
+      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      urgence: formData.get('urgence'),
+      statut: 'nouveau',
+      prix: 'À estimer',
+      artisanId: modalArtisan.id_artisan,
+      artisanName: fullName,
+      artisanMetier: modalArtisan.metier,
+      artisanVille: modalArtisan.ville,
+    };
+
+    const existing = JSON.parse(localStorage.getItem('demandesArtisans') || '[]');
+    existing.push(nouvelleDemande);
+    localStorage.setItem('demandesArtisans', JSON.stringify(existing));
+
+    toast.success(`Demande envoyée à ${fullName} !`);
+    handleCloseModal();
+  };
+
+  const activeFiltersCount = [
+    searchTerm.trim() !== '',
+    selectedMetier !== 'Tous',
+    selectedVille !== 'Toutes',
+  ].filter(Boolean).length;
+
+  // ── Render ───────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-[#F8FAFC]">
+
+      {/* ── Hero / Search Header ─────────────────────────────── */}
+      <div className="bg-gradient-to-br from-[#1A3A5C] to-[#12293f] relative overflow-hidden">
+        {/* Decorative blobs */}
+        <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-[#FF6B35]/10 blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 rounded-full bg-white/5 blur-2xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-10"
+          >
+            <span className="inline-block px-4 py-1.5 bg-[#FF6B35]/20 text-[#FF9A6C] text-xs font-semibold rounded-full mb-4 tracking-wide uppercase">
+              Réseau vérifié · Maroc
+            </span>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight mb-3">
+              Trouvez l'artisan{' '}
+              <span className="text-[#FF6B35]">parfait</span>{' '}
+              pour votre projet
+            </h1>
+            <p className="text-[#8BACC8] text-base max-w-xl mx-auto">
+              Explorez notre réseau de professionnels qualifiés, disponibles et prêts à intervenir.
+            </p>
+          </motion.div>
+
+          {/* Search bar */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="max-w-2xl mx-auto"
+          >
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Nom, métier, ville…"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white border border-white/20 text-[#1A3A5C] placeholder-gray-400 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40 shadow-lg"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setShowFilters(v => !v)}
+                className={`relative px-5 py-3.5 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all shadow-lg ${
+                  showFilters || activeFiltersCount > 0
+                    ? 'bg-[#FF6B35] text-white'
+                    : 'bg-white text-[#1A3A5C] hover:bg-gray-50'
+                }`}
+              >
+                <SlidersHorizontal size={16} />
+                <span className="hidden sm:inline">Filtres</span>
+                {activeFiltersCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A3A5C] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </motion.div>
         </div>
       </div>
 
-      {/* Filtres */}
+      {/* ── Filter Panel ─────────────────────────────────────── */}
       <AnimatePresence>
         {showFilters && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-white border-b border-gray-200"
+            className="bg-white border-b border-gray-100 shadow-sm overflow-hidden"
           >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Filtre métier */}
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Métier */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Métier</label>
-                  <select
-                    value={selectedMetier}
-                    onChange={(e) => setSelectedMetier(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {metiers.map(metier => (
-                      <option key={metier} value={metier}>{metier}</option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-bold text-[#1A3A5C] mb-1.5 uppercase tracking-wide">
+                    Métier
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedMetier}
+                      onChange={e => setSelectedMetier(e.target.value)}
+                      className="w-full appearance-none border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-[#1A3A5C] bg-white focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30 focus:border-[#FF6B35] transition-all"
+                    >
+                      {METIERS.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
 
-                {/* Filtre ville */}
+                {/* Ville */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Ville</label>
-                  <select
-                    value={selectedVille}
-                    onChange={(e) => setSelectedVille(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {villes.map(ville => (
-                      <option key={ville} value={ville}>{ville}</option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-bold text-[#1A3A5C] mb-1.5 uppercase tracking-wide">
+                    Ville
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedVille}
+                      onChange={e => setSelectedVille(e.target.value)}
+                      className="w-full appearance-none border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-[#1A3A5C] bg-white focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30 focus:border-[#FF6B35] transition-all"
+                    >
+                      {VILLES.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
 
                 {/* Tri */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Trier par</label>
-                  <select
-                    value={tri}
-                    onChange={(e) => setTri(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {triOptions.map(option => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-bold text-[#1A3A5C] mb-1.5 uppercase tracking-wide">
+                    Trier par
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedTri}
+                      onChange={e => setSelectedTri(e.target.value)}
+                      className="w-full appearance-none border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-[#1A3A5C] bg-white focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30 focus:border-[#FF6B35] transition-all"
+                    >
+                      {TRI_OPT.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
 
-              {/* Boutons d'action */}
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedMetier('Tous');
-                    setSelectedVille('Toutes');
-                    setTri('Pertinence');
-                  }}
-                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Réinitialiser
-                </button>
-                <button
-                  onClick={() => setShowFilters(false)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Appliquer les filtres
-                </button>
-              </div>
+              {/* Reset */}
+              {activeFiltersCount > 0 && (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-1.5 text-xs text-[#FF6B35] font-semibold hover:underline"
+                  >
+                    <RefreshCw size={12} />
+                    Réinitialiser les filtres
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Résultats */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* En-tête des résultats */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {filteredArtisans.length} artisans trouvés
-            </h2>
-            <p className="text-gray-600">
-              {searchTerm && `pour "${searchTerm}"`}
-              {selectedMetier !== 'Tous' && ` • ${selectedMetier}`}
-              {selectedVille !== 'Toutes' && ` • ${selectedVille}`}
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <TrendingUp size={16} />
-            <span>Tri: {tri}</span>
-          </div>
-        </div>
+      {/* ── Results ───────────────────────────────────────────── */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        {/* Grid des artisans */}
-        {filteredArtisans.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredArtisans.map((artisan) => (
-              <ArtisanCard key={artisan.id} artisan={artisan} />
+        {/* Result count bar */}
+        {!loading && !error && (
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className="text-sm font-semibold text-[#1A3A5C]">
+                <span className="text-[#FF6B35] font-bold text-lg">{filtered.length}</span>
+                {' '}artisan{filtered.length !== 1 ? 's' : ''} trouvé{filtered.length !== 1 ? 's' : ''}
+              </p>
+              {(searchTerm || selectedMetier !== 'Tous' || selectedVille !== 'Toutes') && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {[searchTerm && `"${searchTerm}"`, selectedMetier !== 'Tous' && selectedMetier, selectedVille !== 'Toutes' && selectedVille]
+                    .filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <Award size={13} className="text-[#FF6B35]" />
+              Tous vérifiés
+            </div>
+          </div>
+        )}
+
+        {/* Loading skeletons */}
+        {loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        )}
+
+        {/* Error */}
+        {!loading && error && (
+          <ErrorState message={error} onRetry={fetchArtisans} />
+        )}
+
+        {/* Grid */}
+        {!loading && !error && filtered.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filtered.map((artisan, i) => (
+              <ArtisanCard
+                key={artisan.id_artisan}
+                artisan={artisan}
+                index={i}
+                onContact={handleContact}
+              />
             ))}
           </div>
-        ) : (
-          <div className="text-center py-16">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Search size={40} className="text-gray-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Aucun artisan trouvé</h3>
-            <p className="text-gray-600 max-w-md mx-auto mb-6">
-              Essayez de modifier vos critères de recherche ou de filtres pour trouver des artisans disponibles.
-            </p>
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setSelectedMetier('Tous');
-                setSelectedVille('Toutes');
-              }}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Réinitialiser la recherche
-            </button>
-          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && filtered.length === 0 && (
+          <EmptyState onReset={resetFilters} />
         )}
       </div>
 
-      {/* Modal de demande */}
+      {/* ── Contact Modal ─────────────────────────────────────── */}
       <AnimatePresence>
-        {showDemandeModal && selectedArtisan && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={handleCloseDemandeModal}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Envoyer une demande</h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Artisan sélectionné : <span className="font-medium text-blue-600">{selectedArtisan.name}</span> - {selectedArtisan.metier}
-                  </p>
-                </div>
-                <button
-                  onClick={handleCloseDemandeModal}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X size={20} className="text-gray-500" />
-                </button>
-              </div>
-
-              {/* Formulaire de demande */}
-              <form onSubmit={handleEnvoyerDemande} className="space-y-6">
-                {/* Description du problème */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Description du problème</h3>
-                  <textarea
-                    name="description"
-                    placeholder="Décrivez précisément le problème à résoudre..."
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    rows="4"
-                    required
-                  ></textarea>
-                </div>
-
-                {/* Localisation */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ville
-                    </label>
-                    <input
-                      type="text"
-                      name="ville"
-                      placeholder="Ex: Casablanca"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Code postal
-                    </label>
-                    <input
-                      type="text"
-                      name="codePostal"
-                      placeholder="Ex: 20000"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Urgence */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Niveau d'urgence
-                  </label>
-                  <select 
-                    name="urgence"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    required
-                  >
-                    <option value="basse">Basse</option>
-                    <option value="moyenne">Moyenne</option>
-                    <option value="haute">Haute</option>
-                  </select>
-                </div>
-
-                {/* Boutons d'action */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={handleCloseDemandeModal}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                  >
-                    <Send size={16} />
-                    Envoyer la demande
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
+        {modalArtisan && (
+          <DemandeModal
+            artisan={modalArtisan}
+            onClose={handleCloseModal}
+            onSubmit={handleEnvoyerDemande}
+          />
         )}
       </AnimatePresence>
     </div>
