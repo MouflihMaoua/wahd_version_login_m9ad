@@ -1,72 +1,64 @@
 ﻿// src/pages/artisan/demandes/index.jsx
 import { useState, useEffect } from 'react';
-import { Search, Filter, Calendar, MapPin, Clock, User, Phone, Mail, Star, CheckCircle, XCircle, AlertCircle, Eye, Send, ChevronRight } from 'lucide-react';
-import { SERVICES_ARTISAN } from '../../../core/constants/services';
+import { Search, Filter, Calendar, MapPin, Clock, User, Phone, Mail, CheckCircle, XCircle, AlertCircle, Loader2, MessageCircle } from 'lucide-react';
+import { getInvitationsForArtisan, updateInvitationStatus } from '../../../core/services/invitationService';
+import { notifyInvitationAccepted, notifyInvitationRefused } from '../../../core/services/notificationService';
+import { getOrCreateConversationForDemande } from '../../../core/services/messageService';
+import { useAuthStore } from '../../../core/store/useAuthStore';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 export default function DemandesPage() {
   const [selectedDemande, setSelectedDemande] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('tous');
-  const [allDemandes, setAllDemandes] = useState([]);
+  const [demandes, setDemandes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null);
+  
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
 
-  // Demandes par défaut
-  const defaultDemandes = [
-    {
-      id: 1,
-      client: "Sophie Martin",
-      service: "Plombier",
-      description: "Fuite d'eau sous l'évier de la cuisine",
-      adresse: "15 Rue Hassan II, Casablanca",
-      telephone: "06 12 34 56 78",
-      email: "sophie.martin@email.com",
-      date: "2024-01-20",
-      heure: "14:00",
-      urgence: "moyenne",
-      statut: "nouveau",
-      prix: "À estimer",
-      note: 4.5,
-      
-    },
-    {
-      id: 2,
-      client: "Thomas Bernard",
-      service: "Électricien",
-      description: "Installation d'un nouveau compteur électrique",
-      adresse: "23 Avenue Mohammed V, Rabat",
-      telephone: "06 98 76 54 32",
-      email: "thomas.bernard@email.com",
-      date: "2024-01-21",
-      heure: "10:00",
-      urgence: "basse",
-      statut: "accepté",
-      prix: "2500 DH",
-      note: 4.8,
-    },
-    {
-      id: 3,
-      client: "Julie Dubois",
-      service: "Technicien en électroménager et climatisation",
-      description: "Panne de chaudière - pas d'eau chaude",
-      adresse: "7 Boulevard Zerktouni, Marrakech",
-      telephone: "06 45 67 89 01",
-      email: "julie.dubois@email.com",
-      date: "2024-01-19",
-      heure: "08:00",
-      urgence: "haute",
-      statut: "en_attente",
-      prix: "À estimer",
-      note: 4.2,
-    }
-  ];
-
-  // Charger les demandes depuis localStorage au montage du composant
+  // Charger les demandes depuis Supabase
   useEffect(() => {
-    const demandesEnvoyees = JSON.parse(localStorage.getItem('demandesArtisans') || '[]');
-    setAllDemandes([...defaultDemandes, ...demandesEnvoyees]);
-  }, []);
+    const loadDemandes = async () => {
+      if (!user?.id) return;
+      
+      try {
+        setLoading(true);
+        const result = await getInvitationsForArtisan(user.id);
+        
+        if (result.success) {
+          const mappedDemandes = result.data.map(inv => ({
+            id: inv.id,
+            client: inv.particulier ? `${inv.particulier.prenom_particulier || ''} ${inv.particulier.nom_particulier || ''}`.trim() : 'Client',
+            service: inv.description?.substring(0, 50) || 'Demande',
+            description: inv.description || 'Pas de description',
+            adresse: inv.ville || 'Non spécifiée',
+            date: new Date(inv.date_demande || inv.created_at).toLocaleDateString('fr-FR'),
+            heure: new Date(inv.date_demande || inv.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            urgence: inv.urgence || 'moyenne',
+            statut: inv.statut === 'pending' ? 'nouveau' : inv.statut === 'accepted' ? 'accepté' : inv.statut === 'refused' ? 'refusé' : inv.statut,
+            prix: 'À estimer',
+            rawData: inv
+          }));
+          setDemandes(mappedDemandes);
+        } else {
+          toast.error(result.error || 'Erreur lors du chargement des demandes');
+        }
+      } catch (err) {
+        console.error('Erreur chargement demandes:', err);
+        toast.error('Erreur lors du chargement des demandes');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDemandes();
+  }, [user?.id]);
 
   // Filtrer les demandes
-  const demandes = allDemandes.filter(demande => {
+  const filteredDemandes = demandes.filter(demande => {
     const matchesSearch = demande.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          demande.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          demande.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -85,7 +77,7 @@ export default function DemandesPage() {
   };
 
   const getUrgencyColor = (urgence) => {
-    switch (urgence) {
+    switch (urgence?.toLowerCase()) {
       case 'haute': return 'bg-red-100 text-red-800';
       case 'moyenne': return 'bg-orange-100 text-orange-800';
       case 'basse': return 'bg-green-100 text-green-800';
@@ -93,24 +85,74 @@ export default function DemandesPage() {
     }
   };
 
-  const handleAccepter = (id) => {
-    console.log('Demande acceptée:', id);
-    // Mettre à jour le statut dans la base de données
+  const handleAccepter = async (demande) => {
+    try {
+      setActionLoading(demande.id);
+      
+      const result = await updateInvitationStatus(demande.id, 'acceptée');
+      
+      if (result.success) {
+        await notifyInvitationAccepted(demande.rawData.id_particulier, user.id, demande.id);
+        await getOrCreateConversationForDemande(demande.id);
+        
+        toast.success('Demande acceptée ! Une conversation a été ouverte avec le client.');
+        
+        setDemandes(prev => prev.map(d => 
+          d.id === demande.id ? { ...d, statut: 'accepté' } : d
+        ));
+      } else {
+        toast.error(result.error || 'Erreur lors de l\'acceptation');
+      }
+    } catch (err) {
+      console.error('Erreur acceptation:', err);
+      toast.error('Erreur lors de l\'acceptation de la demande');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleRefuser = (id) => {
-    console.log('Demande refusée:', id);
-    // Mettre à jour le statut dans la base de données
+  const handleRefuser = async (demande) => {
+    try {
+      setActionLoading(demande.id);
+      
+      const result = await updateInvitationStatus(demande.id, 'refusée');
+      
+      if (result.success) {
+        await notifyInvitationRefused(demande.rawData.id_particulier, user.id, demande.id);
+        
+        toast.success('Demande refusée. Le client en a été notifié.');
+        
+        setDemandes(prev => prev.map(d => 
+          d.id === demande.id ? { ...d, statut: 'refusé' } : d
+        ));
+      } else {
+        toast.error(result.error || 'Erreur lors du refus');
+      }
+    } catch (err) {
+      console.error('Erreur refus:', err);
+      toast.error('Erreur lors du refus de la demande');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleVoirDetails = (demande) => {
-    console.log('Voir détails de la demande:', demande.id);
-    // Rediriger vers une page de détails (simuler pour l'instant)
-    alert(`Redirection vers les détails de la demande ${demande.id}\n\nClient: ${demande.client}\nService: ${demande.service}\n\n(Dans une vraie application, cela redirigerait vers une page de détails complète)`);
-    
-    // Alternative: rediriger vers une page de détails si elle existe
-    // window.location.href = `/dashboard/artisan/demandes/${demande.id}`;
+  const handleOuvrirConversation = (demande) => {
+    navigate('/dashboard/artisan/messages', { 
+      state: { 
+        demandeId: demande.id,
+        id_particulier: demande.rawData?.id_particulier,
+        from: 'demandes'
+      }
+    });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -122,7 +164,7 @@ export default function DemandesPage() {
             <p className="text-gray-600">Gérez les nouvelles demandes d'intervention</p>
           </div>
           <div className="bg-blue-100 px-4 py-2 rounded-lg">
-            <span className="text-blue-800 font-medium">{allDemandes.length} demandes</span>
+            <span className="text-blue-800 font-medium">{demandes.length} demandes</span>
           </div>
         </div>
       </div>
@@ -160,7 +202,7 @@ export default function DemandesPage() {
 
       {/* Liste des demandes */}
       <div className="grid gap-4">
-        {demandes.map((demande) => (
+        {filteredDemandes.map((demande) => (
           <div key={demande.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
@@ -175,26 +217,6 @@ export default function DemandesPage() {
                 </div>
                 <p className="text-gray-600 mb-3">{demande.description}</p>
                 
-                {/* Afficher les informations de l'artisan si la demande vient de la recherche */}
-                {demande.artisanName && (
-                  <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-center gap-3">
-                      {demande.artisanImage && (
-                        <img 
-                          src={demande.artisanImage} 
-                          alt={demande.artisanName}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      )}
-                      <div>
-                        <p className="text-sm font-medium text-blue-900">Artisan concerné:</p>
-                        <p className="text-sm text-blue-800">{demande.artisanName} - {demande.artisanMetier}</p>
-                        <p className="text-xs text-blue-600">{demande.artisanVille}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2 text-gray-600">
                     <User className="h-4 w-4" />
@@ -205,57 +227,60 @@ export default function DemandesPage() {
                     <span>{demande.adresse}</span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-600">
-                    <Phone className="h-4 w-4" />
-                    <span>{demande.telephone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Mail className="h-4 w-4" />
-                    <span>{demande.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
                     <Calendar className="h-4 w-4" />
                     <span>{demande.date} à {demande.heure}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Star className="h-4 w-4" />
-                    <span>{demande.note} ⭐</span>
-                  </div>
                 </div>
-
-              
               </div>
 
               <div className="ml-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-gray-900">{demande.prix}</p>
-                  </div>
-                  
+                <div className="text-right mb-3">
+                  <p className="text-lg font-bold text-gray-900">{demande.prix}</p>
                 </div>
                 
                 {demande.statut === 'nouveau' && (
                   <div className="flex flex-col gap-2">
                     <button
-                      onClick={() => handleAccepter(demande.id)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                      onClick={() => handleAccepter(demande)}
+                      disabled={actionLoading === demande.id}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      <CheckCircle className="h-4 w-4" />
+                      {actionLoading === demande.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4" />
+                      )}
                       Accepter
                     </button>
                     <button
-                      onClick={() => handleRefuser(demande.id)}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+                      onClick={() => handleRefuser(demande)}
+                      disabled={actionLoading === demande.id}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      <XCircle className="h-4 w-4" />
+                      {actionLoading === demande.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <XCircle className="h-4 w-4" />
+                      )}
                       Refuser
                     </button>
                   </div>
                 )}
                 
-                {demande.statut === 'en_attente' && (
-                  <div className="flex items-center gap-2 text-yellow-600">
-                    <AlertCircle className="h-5 w-5" />
-                    <span className="text-sm">En cours...</span>
+                {demande.statut === 'accepté' && (
+                  <button
+                    onClick={() => handleOuvrirConversation(demande)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Discuter
+                  </button>
+                )}
+                
+                {demande.statut === 'refusé' && (
+                  <div className="flex items-center gap-2 text-red-600">
+                    <XCircle className="h-5 w-5" />
+                    <span className="text-sm">Refusée</span>
                   </div>
                 )}
               </div>
@@ -264,7 +289,7 @@ export default function DemandesPage() {
         ))}
       </div>
 
-      {demandes.length === 0 && (
+      {filteredDemandes.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500">Aucune demande trouvée</p>
         </div>

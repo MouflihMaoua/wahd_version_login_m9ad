@@ -111,8 +111,7 @@ export default function AvisPage() {
           <div className="px-6 py-8 text-sm text-red-600 space-y-2">
             <p>{q.error.message}</p>
             <p className="text-xs text-slate-600">
-              Assurez-vous que la table <code className="font-mono">avis</code> existe (voir{' '}
-              <code className="font-mono">setup-admin-dashboard.sql</code>).
+              Assurez-vous que la table <code className="font-mono">evaluation</code> existe avec les colonnes requises.
             </p>
           </div>
         ) : (

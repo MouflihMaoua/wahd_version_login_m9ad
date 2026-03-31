@@ -5,6 +5,7 @@ import {
   Mail, Phone, MapPin, Clock, Edit, Trash2, Eye, Plus, X, XCircle, Loader2
 } from 'lucide-react';
 import { supabase } from '../../../core/services/supabaseClient';
+import { getParticuliersFromChat } from '../../../core/services/messageService';
 import { SERVICES_ARTISAN } from '../../../core/constants/services';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -17,6 +18,7 @@ const STATUS_COLORS = {
 };
 
 const emptyNewDevis = {
+  id_particulier: null,
   nom_particulier: '',
   adresse:         '',
   telephone:       '',
@@ -40,6 +42,16 @@ export default function DevisPage() {
   const [saving,         setSaving]         = useState(false);
   const [error,          setError]          = useState('');
   const [userId,         setUserId]         = useState(null);
+  
+  // ── Recherche de particulier ──
+  const [particulierSearch, setParticulierSearch] = useState('');
+  const [particuliersFound, setParticuliersFound] = useState([]);
+  const [selectedParticulier, setSelectedParticulier] = useState(null);
+  const [searchingParticulier, setSearchingParticulier] = useState(false);
+  
+  // ── Contacts chat ──
+  const [chatContacts, setChatContacts] = useState([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
 
   // ── Chargement ──
   useEffect(() => {
@@ -80,6 +92,7 @@ export default function DevisPage() {
         .from('devis')
         .insert({
           id_artisan:      userId,
+          id_particulier:  newDevis.id_particulier,
           nom_particulier: newDevis.nom_particulier,
           adresse:         newDevis.adresse,
           telephone:       newDevis.telephone,
@@ -113,18 +126,119 @@ export default function DevisPage() {
     }
   };
 
+  // ── Sélectionner un particulier depuis les contacts chat ──
+  const handleSelectParticulier = (particulier) => {
+    setNewDevis(prev => ({
+      ...prev,
+      id_particulier: particulier.id,
+      nom_particulier: particulier.nom,
+      telephone: particulier.telephone || '',
+      email: particulier.email || '',
+    }));
+  };
+
+  // ── Charger les contacts chat ──
+  const loadChatContacts = async () => {
+    try {
+      setLoadingContacts(true);
+      const result = await getParticuliersFromChat();
+      if (result.success) {
+        setChatContacts(result.data || []);
+      } else {
+        console.error('Erreur chargement contacts:', result.error);
+      }
+    } catch (err) {
+      console.error('Erreur loadChatContacts:', err);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+  
+  // Charger les contacts quand on ouvre le modal
+  useEffect(() => {
+    if (showAddModal) {
+      loadChatContacts();
+    }
+  }, [showAddModal]);
+
   // ── Changer statut ──
   const handleChangeStatut = async (id, statut) => {
     try {
+      let updateData = { statut };
+      
+      // Si on envoie le devis et un particulier est sélectionné
+      if (statut === 'envoyé' && selectedParticulier) {
+        updateData.id_particulier = selectedParticulier.id_particulier;
+        updateData.nom_particulier = `${selectedParticulier.prenom_particulier} ${selectedParticulier.nom_particulier}`;
+      } else if (statut === 'envoyé') {
+        // Chercher par email si pas de sélection manuelle
+        const devis = devisList.find(d => d.id === id);
+        if (devis?.email) {
+          const { data: particulier } = await supabase
+            .from('particulier')
+            .select('id_particulier')
+            .eq('email', devis.email)
+            .single();
+          
+          if (particulier) {
+            updateData.id_particulier = particulier.id_particulier;
+          }
+        }
+      }
+      
       const { error: err } = await supabase
         .from('devis')
-        .update({ statut })
+        .update(updateData)
         .eq('id', id);
       if (err) throw err;
-      setDevisList(prev => prev.map(d => d.id === id ? { ...d, statut } : d));
-      if (selectedDevis?.id === id) setSelectedDevis(prev => ({ ...prev, statut }));
+      setDevisList(prev => prev.map(d => d.id === id ? { ...d, ...updateData } : d));
+      if (selectedDevis?.id === id) setSelectedDevis(prev => ({ ...prev, ...updateData }));
+      
+      // Reset sélection
+      setSelectedParticulier(null);
+      setParticuliersFound([]);
     } catch (err) {
       setError(err.message);
+    }
+  };
+  
+  // ── Rechercher un particulier ──
+  const searchParticulier = async () => {
+    if (!particulierSearch.trim()) return;
+    
+    console.log('🔍 Recherche de:', particulierSearch);
+    
+    try {
+      setSearchingParticulier(true);
+      
+      // Simplifions la recherche - chercher dans nom et prenom séparément
+      const { data: dataNom, error: errorNom } = await supabase
+        .from('particulier')
+        .select('id_particulier, nom_particulier, prenom_particulier')
+        .ilike('nom_particulier', `%${particulierSearch}%`)
+        .limit(5);
+      
+      const { data: dataPrenom, error: errorPrenom } = await supabase
+        .from('particulier')
+        .select('id_particulier, nom_particulier, prenom_particulier')
+        .ilike('prenom_particulier', `%${particulierSearch}%`)
+        .limit(5);
+      
+      if (errorNom) console.error('❌ Erreur nom:', errorNom);
+      if (errorPrenom) console.error('❌ Erreur prenom:', errorPrenom);
+      
+      // Combiner et dédupliquer les résultats
+      const combined = [...(dataNom || []), ...(dataPrenom || [])];
+      const unique = combined.filter((p, index, self) => 
+        index === self.findIndex((t) => t.id_particulier === p.id_particulier)
+      );
+      
+      console.log('✅ Résultats trouvés:', unique);
+      setParticuliersFound(unique);
+    } catch (err) {
+      console.error('💥 Erreur recherche:', err);
+    } finally {
+      setSearchingParticulier(false);
     }
   };
 
@@ -147,15 +261,16 @@ export default function DevisPage() {
   };
 
   // ── Filtrage ──
-  const filtered = devisList.filter(d => {
-    const q = searchTerm.toLowerCase();
+  const filtered = Array.isArray(devisList) ? devisList.filter(d => {
+    if (!d) return false;
+    const q = (searchTerm || '').toLowerCase();
     const matchSearch =
-      (d.nom_particulier ?? '').toLowerCase().includes(q) ||
-      (d.service          ?? '').toLowerCase().includes(q) ||
-      (d.numero           ?? '').toLowerCase().includes(q);
+      ((d.nom_particulier || '').toString().toLowerCase().includes(q)) ||
+      ((d.service || '').toString().toLowerCase().includes(q)) ||
+      ((d.numero || '').toString().toLowerCase().includes(q));
     const matchStatus = filterStatus === 'tous' || d.statut === filterStatus;
     return matchSearch && matchStatus;
-  });
+  }) : [];
 
   // ── Loading / Error ──
   if (loading) return (
@@ -273,7 +388,14 @@ export default function DevisPage() {
 
                 {devis.statut === 'brouillon' && (
                   <button
-                    onClick={() => handleChangeStatut(devis.id, 'envoyé')}
+                    onClick={() => {
+                      setSelectedDevis(devis);
+                      // Pré-remplir la recherche si email existe
+                      if (devis.email) {
+                        setParticulierSearch(devis.email);
+                        searchParticulier();
+                      }
+                    }}
                     className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"
                   >
                     <Send className="h-4 w-4" />Envoyer
@@ -310,6 +432,48 @@ export default function DevisPage() {
             </div>
 
             <div className="space-y-4">
+              {/* Sélection du particulier depuis les contacts chat */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Choisir un particulier *</label>
+                {loadingContacts ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Chargement des contacts...
+                  </div>
+                ) : chatContacts.length > 0 ? (
+                  <select 
+                    value={newDevis.id_particulier || ''} 
+                    onChange={(e) => {
+                      const selected = chatContacts.find(c => c.id === e.target.value);
+                      if (selected) handleSelectParticulier(selected);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">-- Sélectionnez un particulier --</option>
+                    {chatContacts.map((contact) => (
+                      <option key={contact.id} value={contact.id}>
+                        {contact.nom} {contact.email ? `(${contact.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                    <p>Aucun contact trouvé dans vos conversations.</p>
+                    <p className="text-xs mt-1">Commencez une discussion avec un particulier pour pouvoir lui envoyer un devis.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Affichage des infos du particulier sélectionné */}
+              {newDevis.id_particulier && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-medium text-blue-900">✓ Particulier sélectionné</p>
+                  <p className="text-sm text-blue-700">{newDevis.nom_particulier}</p>
+                  {newDevis.email && <p className="text-xs text-blue-600">{newDevis.email}</p>}
+                  {newDevis.telephone && <p className="text-xs text-blue-600">{newDevis.telephone}</p>}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nom du particulier *</label>
                 <input type="text" value={newDevis.nom_particulier} onChange={(e) => setNewDevis(p => ({ ...p, nom_particulier: e.target.value }))}
@@ -491,12 +655,61 @@ export default function DevisPage() {
 
             <div className="flex justify-end gap-3">
               {selectedDevis.statut === 'brouillon' && (
-                <button
-                  onClick={() => handleChangeStatut(selectedDevis.id, 'envoyé')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                >
-                  <Send className="h-4 w-4" />Envoyer au particulier
-                </button>
+                <>
+                  {/* Recherche de particulier */}
+                  <div className="flex-1 mr-4">
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        placeholder="Rechercher un particulier par email ou nom..."
+                        value={particulierSearch}
+                        onChange={(e) => setParticulierSearch(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && searchParticulier()}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <button
+                        onClick={searchParticulier}
+                        disabled={searchingParticulier}
+                        className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                      >
+                        {searchingParticulier ? '...' : 'Rechercher'}
+                      </button>
+                    </div>
+                    
+                    {/* Résultats de recherche */}
+                    {particuliersFound.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-2 max-h-32 overflow-y-auto">
+                        <p className="text-xs text-gray-500 mb-1">Cliquez pour sélectionner :</p>
+                        {particuliersFound.map((p) => (
+                          <button
+                            key={p.id_particulier}
+                            onClick={() => setSelectedParticulier(p)}
+                            className={`w-full text-left px-3 py-2 rounded text-sm mb-1 transition-colors ${
+                              selectedParticulier?.id_particulier === p.id_particulier
+                                ? 'bg-blue-100 border border-blue-300'
+                                : 'hover:bg-white border border-transparent'
+                            }`}
+                          >
+                            <span className="font-medium">{p.prenom_particulier} {p.nom_particulier}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {selectedParticulier && (
+                      <p className="text-xs text-green-600 mt-1">
+                        ✓ Particulier sélectionné: {selectedParticulier.prenom_particulier} {selectedParticulier.nom_particulier}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <button
+                    onClick={() => handleChangeStatut(selectedDevis.id, 'envoyé')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <Send className="h-4 w-4" />Envoyer au particulier
+                  </button>
+                </>
               )}
               {selectedDevis.statut === 'envoyé' && (
                 <button

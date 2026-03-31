@@ -3,7 +3,6 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
-  Users,
   UserCircle,
   Inbox,
   FileSpreadsheet,
@@ -18,16 +17,15 @@ import {
 import { useState } from 'react';
 import { supabase } from '../../core/services/supabaseClient';
 import { useAuthStore } from '../../core/store/useAuthStore';
+import logo from '../../assets/logo_app.png';
 import { cn } from '../utils/cn';
 
 const NAV = [
   { to: '/admin', end: true, label: 'Vue d’ensemble', icon: LayoutDashboard },
   { to: '/admin/artisans', label: 'Artisans', icon: Hammer },
   { to: '/admin/particuliers', label: 'Particuliers', icon: UserCircle },
-  { to: '/admin/demandes', label: 'Demandes', icon: Inbox },
   { to: '/admin/devis', label: 'Devis', icon: FileSpreadsheet },
   { to: '/admin/avis', label: 'Avis', icon: Star },
-  { to: '/admin/moderation', label: 'Modération', icon: ShieldAlert },
   { to: '/admin/parametres', label: 'Paramètres', icon: Settings },
 ];
 
@@ -62,9 +60,11 @@ export default function AdminLayout() {
       >
         <div className="flex h-16 items-center justify-between gap-2 border-b border-slate-100 px-4">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#1A3A5C] text-white shadow-md shadow-[#1A3A5C]/25">
-              <Users className="h-4 w-4" />
-            </div>
+            <img
+              src={logo}
+              alt="7rayfi"
+              className="h-9 w-9 shrink-0 rounded-xl object-contain bg-white shadow-md"
+            />
             <div className="min-w-0">
               <p className="text-sm font-bold text-[#1A3A5C] truncate">7rayfi</p>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-orange-500">

@@ -1,21 +1,17 @@
 import React from 'react';
-import ArtisanNavbar from '../../components/navbar/ArtisanNavbar';
-import Footer from '../components/public/Footer';
 import { Toaster } from 'react-hot-toast';
 
 /**
  * Layout dédié pour les utilisateurs de type "artisan"
- * Utilise ArtisanNavbar et s'applique uniquement aux pages d'artisans
+ * Sans navbar - navigation uniquement via la sidebar interne du Dashboard
  */
 const ArtisanLayout = ({ children }) => {
     return (
-        <div className="min-h-screen flex flex-col bg-brand-offwhite">
+        <div className="min-h-screen bg-gray-50">
             <Toaster position="top-right" />
-            <ArtisanNavbar />
-            <main className="flex-grow">
+            <main className="min-h-screen">
                 {children}
             </main>
-            <Footer />
         </div>
     );
 };

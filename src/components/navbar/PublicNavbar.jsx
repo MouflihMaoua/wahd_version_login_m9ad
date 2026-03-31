@@ -30,7 +30,7 @@ const PublicNavbar = () => {
             <Home size={20} className="text-white" />
           </div>
           <span className="text-2xl font-bold text-brand-dark">7rayfi</span>
-          <span className="text-brand-orange font-bold">.pro</span>
+          <span className="text-brand-orange font-bold"></span>
         </Link>
 
         {/* Navigation Links */}
@@ -78,7 +78,7 @@ const PublicNavbar = () => {
               <Home size={16} className="text-white" />
             </div>
             <span className="text-lg font-bold text-brand-dark">7rayfi</span>
-            <span className="text-brand-orange font-bold">.pro</span>
+            <span className="text-brand-orange font-bold"></span>
           </Link>
 
           <button

@@ -11,6 +11,7 @@ import DemandesView from './DemandesView.jsx';
 import MessagesView from './MessagesView_Modern.jsx';
 import ProfilView from './ProfilView_Modern.jsx';
 import DevisView from './DevisView.jsx';
+import AvisParticulierView from './AvisParticulierView.jsx';
 
 const ClientDashboard = () => {
     const { pathname } = useLocation();
@@ -20,6 +21,7 @@ const ClientDashboard = () => {
         if (pathname.endsWith('/messages'))  return <MessagesView />;
         if (pathname.endsWith('/profil'))    return <ProfilView />;
         if (pathname.endsWith('/devis'))     return <DevisView />;
+        if (pathname.endsWith('/avis'))      return <AvisParticulierView />;
         if (
             pathname === '/dashboard/particulier' ||
             pathname === '/dashboard/particulier/' ||

@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { motion } from 'framer-motion';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { authService } from '../../core/services/authService';
+import { supabase } from '../../core/services/supabaseClient';
+import logoApp from '../../assets/logo_app.png';
 
 const forgotPasswordSchema = z.object({
   email: z
@@ -31,7 +32,9 @@ const ForgotPassword = () => {
   const onSubmit = async ({ email }) => {
     setIsLoading(true);
     try {
-      const { error } = await authService.requestPasswordReset(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'http://localhost:5177/reset-password',
+      });
 
       if (error) {
         toast.error(error.message || 'Impossible d’envoyer l’email. Réessayez plus tard.');
@@ -59,7 +62,7 @@ const ForgotPassword = () => {
       >
         <div className="flex items-center justify-center mb-8">
           <Link to="/" className="flex items-center gap-2">
-            <img src="/assets/logo_app.png" alt="7rayfi_logo" className="w-12 h-12 object-contain" />
+            <img src={logoApp} alt="7rayfi_logo" className="w-12 h-12 object-contain" />
             <span className="text-xl font-bold text-white">7rayfi</span>
           </Link>
         </div>

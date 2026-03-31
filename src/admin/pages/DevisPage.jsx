@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Search, Download } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Search, Download, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AdminCard, AdminCardHeader } from '../components/ui/AdminCard';
 import { DataTable } from '../components/ui/DataTable';
@@ -33,6 +33,7 @@ export default function DevisPage() {
   const [statut, setStatut] = useState('tous');
   const [search, setSearch] = useState('');
   const [qSearch, setQSearch] = useState('');
+  const queryClient = useQueryClient();
 
   const q = useQuery({
     queryKey: ['admin-devis', page, statut, qSearch],
@@ -56,7 +57,6 @@ export default function DevisPage() {
       exportRowsToCsv(
         rows.map((r) => ({
           id: r.id,
-          numero_devis: r.numero_devis,
           statut: r.statut,
           service: r.service,
           montant_ttc: r.montant_ttc,
@@ -65,7 +65,6 @@ export default function DevisPage() {
         })),
         [
           { key: 'id', label: 'id' },
-          { key: 'numero_devis', label: 'numero' },
           { key: 'statut', label: 'statut' },
           { key: 'service', label: 'service' },
           { key: 'montant_ttc', label: 'montant_ttc' },
@@ -139,6 +138,24 @@ export default function DevisPage() {
           <TableSkeleton />
         ) : q.error ? (
           <p className="px-6 py-8 text-sm text-red-600">{q.error.message}</p>
+        ) : q.data.rows.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <p className="text-slate-500 text-sm mb-2">Aucun devis trouvé</p>
+            <p className="text-slate-400 text-xs mb-4">
+              {q.data.total === 0 
+                ? "La table devis est vide. Créez des devis depuis le dashboard artisan." 
+                : "Aucun résultat pour les filtres sélectionnés."}
+            </p>
+            <button
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ['admin-devis'] });
+                toast.success('Données rafraîchies');
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+            >
+              <RefreshCw className="h-4 w-4" /> Rafraîchir
+            </button>
+          </div>
         ) : (
           <>
             <DataTable
@@ -147,10 +164,10 @@ export default function DevisPage() {
               columns={[
                 {
                   key: 'ref',
-                  label: 'Réf / service',
+                  label: 'ID / service',
                   render: (r) => (
                     <div>
-                      <p className="font-semibold text-slate-800">{r.numero_devis ?? r.id?.slice(0, 8)}</p>
+                      <p className="font-semibold text-slate-800">{r.id?.slice(0, 8)}</p>
                       <p className="text-xs text-slate-500">{r.service}</p>
                     </div>
                   ),
@@ -167,7 +184,7 @@ export default function DevisPage() {
                   label: 'TTC',
                   render: (r) => (
                     <span className="tabular-nums font-semibold text-slate-800">
-                      {r.montant_ttc != null ? `${Number(r.montant_ttc).toLocaleString('fr-FR')} MAD` : '—'}
+                      {r.montant_ttc != null ? `${Number(r.montant_ttc).toLocaleString('fr-FR')} DH` : '—'}
                     </span>
                   ),
                 },

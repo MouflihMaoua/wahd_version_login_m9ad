@@ -12,6 +12,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useAuthStore } from '../../core/store/useAuthStore';
+import logoApp from '../../assets/logo_app.png';
 
 // Navigation items for the particulier dashboard
 const NAV_ITEMS = [
@@ -95,7 +96,7 @@ const Sidebar = ({ isOpen, onClose, onMenuClick }) => {
         <div className="flex items-center justify-between px-6 pt-6 pb-5 border-b border-white/10">
           <Link to="/" className="flex items-center gap-2.5">
             <img
-              src="/assets/logo_app.png"
+              src={logoApp}
               alt="7rayfi"
               className="w-9 h-9 object-contain"
               onError={(e) => { e.target.style.display = 'none'; }}

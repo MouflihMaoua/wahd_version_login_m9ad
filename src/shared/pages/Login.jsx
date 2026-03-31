@@ -5,6 +5,7 @@ import { useAuthStore } from '../../core/store/useAuthStore';
 import { supabase } from '../../core/services/supabaseClient';
 import { authenticateWithSupabase, determineUserRole } from '../../core/utils/authUtils';
 import toast from 'react-hot-toast';
+import logoApp from '../../assets/logo_app.png';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -173,7 +174,7 @@ const Login = () => {
 
                     {/* Logo */}
                     <Link to="/" className="flex items-center gap-2 mb-8">
-                        <img src="/assets/logo_app.png" alt="7rayfi_logo" className="w-16 h-16 object-contain" />
+                        <img src={logoApp} alt="7rayfi_logo" className="w-16 h-16 object-contain" />
                     </Link>
 
                     <h2 className="text-5xl font-bold leading-tight mb-8">

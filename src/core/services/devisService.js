@@ -25,9 +25,9 @@ export const createDevis = async (devisData) => {
     
     // Préparation des données pour l'insertion selon votre structure
     const devisToInsert = {
-      id_artisan: user.id, // Utiliser l'ID de l'utilisateur connecté
-      id_particulier: null, // Sera rempli si le devis est pour un particulier
-      nom_particulier: devisData.nom_client.trim(), // Nom du client
+      id_artisan: user.id,
+      id_particulier: devisData.id_particulier || null, // ID du particulier si disponible
+      nom_particulier: devisData.nom_client.trim(),
       telephone: devisData.telephone_client?.trim() || null,
       email: devisData.email_client.trim(),
       adresse: devisData.adresse_client.trim(),
@@ -38,9 +38,9 @@ export const createDevis = async (devisData) => {
       montant_ht: parseFloat(devisData.montant_ht) || 0,
       tva: parseFloat(devisData.tva) || 20,
       montant_ttc: parseFloat(devisData.montant_ttc) || 0,
-      articles: [], // Sera implémenté plus tard
+      articles: [],
       statut: 'brouillon',
-      date_creation: new Date().toISOString().split('T')[0], // Format YYYY-MM-DD
+      date_creation: new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -74,7 +74,7 @@ export const createDevis = async (devisData) => {
     };
     
   } catch (error) {
-    console.error('💥 Erreur lors de la création du devis:', error);
+    console.error(' Erreur lors de la création du devis:', error);
     return {
       success: false,
       error: error.message || 'Erreur lors de la création du devis'
@@ -83,7 +83,7 @@ export const createDevis = async (devisData) => {
 };
 
 /**
- * Met à jour le statut d'un devis
+ * Met à jour le statut d'un devis et envoie une notification à l'artisan
  * @param {string} devisId - ID du devis
  * @param {string} nouveauStatut - Nouveau statut (brouillon, envoyé, accepté, refusé, expiré)
  * @returns {Promise<Object>} - Résultat de la mise à jour
@@ -96,6 +96,15 @@ export const updateStatutDevis = async (devisId, nouveauStatut) => {
       throw new Error(`Statut invalide. Statuts valides: ${statutsValides.join(', ')}`);
     }
     
+    // Récupérer le devis actuel pour avoir l'id_artisan
+    const { data: devisActuel, error: fetchError } = await supabase
+      .from('devis')
+      .select('id_artisan, id_particulier, statut')
+      .eq('id', devisId)
+      .single();
+    
+    if (fetchError) throw fetchError;
+    
     const { data, error } = await supabase
       .from('devis')
       .update({
@@ -107,11 +116,11 @@ export const updateStatutDevis = async (devisId, nouveauStatut) => {
       .single();
     
     if (error) {
-      console.error('❌ Erreur lors de la mise à jour du statut:', error);
+      console.error(' Erreur lors de la mise à jour du statut:', error);
       throw new Error('Erreur lors de la mise à jour du statut: ' + error.message);
     }
     
-    console.log('✅ Statut du devis mis à jour:', data);
+    console.log(' Statut du devis mis à jour:', data);
     
     return {
       success: true,

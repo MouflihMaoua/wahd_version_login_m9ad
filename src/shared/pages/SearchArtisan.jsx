@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../core/services/supabaseClient';
 import { SERVICES_ARTISAN, VILLES_MAROC } from '../../core/constants/services';
+import { createInvitation } from '../../core/services/invitationService';
 import toast from 'react-hot-toast';
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -337,6 +338,7 @@ const SearchArtisan = () => {
     setLoading(true);
     setError(null);
     try {
+      console.log('🔍 Fetching artisans from Supabase...');
       const { data, error: sbError } = await supabase
         .from('artisan')
         .select(`
@@ -353,10 +355,26 @@ const SearchArtisan = () => {
         `)
         .order('created_at', { ascending: false });
 
+      console.log('📊 Raw data from Supabase:', data);
+      console.log('❌ Supabase error:', sbError);
+
       if (sbError) throw sbError;
+      
+      // Log each artisan for debugging
+      data?.forEach((artisan, i) => {
+        console.log(`👤 Artisan ${i + 1}:`, {
+          id: artisan.id_artisan,
+          nom: artisan.nom_artisan,
+          prenom: artisan.prenom_artisan,
+          photo: artisan.photo_profil,
+          metier: artisan.metier,
+          ville: artisan.ville
+        });
+      });
+      
       setArtisans(data ?? []);
     } catch (err) {
-      console.error('Supabase fetch error:', err);
+      console.error('💥 Supabase fetch error:', err);
       setError(err.message ?? 'Erreur lors du chargement des artisans.');
     } finally {
       setLoading(false);
@@ -411,36 +429,26 @@ const SearchArtisan = () => {
   const handleContact = (artisan) => setModalArtisan(artisan);
   const handleCloseModal = () => setModalArtisan(null);
 
-  const handleEnvoyerDemande = (e) => {
+  const handleEnvoyerDemande = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const fullName = `${modalArtisan.prenom_artisan ?? ''} ${modalArtisan.nom_artisan ?? ''}`.trim();
 
-    const nouvelleDemande = {
-      id: Date.now(),
-      client: 'Client Actuel',
-      service: modalArtisan.metier,
-      description: formData.get('description'),
-      adresse: `${formData.get('ville')} - ${formData.get('codePostal')}`,
-      telephone: 'À définir',
-      email: 'À définir',
-      date: new Date().toISOString().split('T')[0],
-      heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      urgence: formData.get('urgence'),
-      statut: 'nouveau',
-      prix: 'À estimer',
-      artisanId: modalArtisan.id_artisan,
-      artisanName: fullName,
-      artisanMetier: modalArtisan.metier,
-      artisanVille: modalArtisan.ville,
+    const invitationData = {
+      id_artisan: modalArtisan.id_artisan,
+      service: modalArtisan.metier || 'Service non spécifié',
+      message: formData.get('description'),
+      description: `Ville: ${formData.get('ville')}, Code postal: ${formData.get('codePostal')}, Urgence: ${formData.get('urgence')}`
     };
 
-    const existing = JSON.parse(localStorage.getItem('demandesArtisans') || '[]');
-    existing.push(nouvelleDemande);
-    localStorage.setItem('demandesArtisans', JSON.stringify(existing));
-
-    toast.success(`Demande envoyée à ${fullName} !`);
-    handleCloseModal();
+    const result = await createInvitation(invitationData);
+    
+    if (result.success) {
+      toast.success(`Demande envoyée à ${fullName} !`);
+      handleCloseModal();
+    } else {
+      toast.error(result.error || 'Erreur lors de l\'envoi de la demande');
+    }
   };
 
   const activeFiltersCount = [

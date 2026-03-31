@@ -8,6 +8,7 @@ import { Lock, ArrowLeft, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../core/services/supabaseClient';
 import { authService } from '../../core/services/authService';
+import logoApp from '../../assets/logo_app.png';
 
 const resetSchema = z
   .object({
@@ -26,20 +27,12 @@ const resetSchema = z
   });
 
 /**
- * Page atteinte via le lien dans l’email Supabase (redirectTo = …/reinitialiser-mot-de-passe).
- * La session « recovery » est établie à partir du hash d’URL (#access_token=…&type=recovery).
+ * Page atteinte via le lien dans l'email Supabase.
+ * Supabase avec detectSessionInUrl=true consomme automatiquement le token.
+ * On doit donc vérifier la session existante, pas seulement le hash URL.
  */
-function captureRecoveryIntentFromUrl() {
-  if (typeof window === 'undefined') return false;
-  const h = window.location.hash;
-  const q = window.location.search;
-  const inHash =
-    h.includes('type=recovery') ||
-    h.includes('type%3Drecovery') ||
-    h.includes('type%3drecovery') ||
-    (h.includes('access_token') && h.includes('refresh_token'));
-  const inQuery = /[?&]type=recovery(?:&|$)/.test(q) || /[?&]token_hash=/.test(q);
-  return inHash || inQuery;
+function debugLog(label, data) {
+  console.log(`[ResetPassword] ${label}:`, data);
 }
 
 const ResetPassword = () => {
@@ -47,17 +40,19 @@ const ResetPassword = () => {
   const [showPw, setShowPw] = useState(false);
   const [showPw2, setShowPw2] = useState(false);
   const doneRef = useRef(false);
-  const recoveryIntentRef = useRef(captureRecoveryIntentFromUrl());
+  const authListenerRef = useRef(null);
 
   const markReady = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
+    debugLog('Phase', 'ready');
     setPhase('ready');
   }, []);
 
   const markError = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
+    debugLog('Phase', 'error');
     setPhase('error');
   }, []);
 
@@ -70,46 +65,73 @@ const ResetPassword = () => {
     defaultValues: { password: '', confirmPassword: '' },
   });
 
-  const establishRecoverySession = useCallback(async () => {
-    for (let i = 0; i < 10; i++) {
+  // Vérification robuste de la session de recovery
+  const verifyRecoverySession = useCallback(async () => {
+    debugLog('Starting verification', { url: window.location.href });
+    
+    // Attendre que Supabase traite le token (jusqu'à 3 secondes)
+    for (let i = 0; i < 15; i++) {
       if (doneRef.current) return;
-      await new Promise((r) => setTimeout(r, 280));
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user && recoveryIntentRef.current) {
+      
+      const { data: { session }, error } = await supabase.auth.getSession();
+      debugLog(`Attempt ${i + 1}`, { 
+        hasSession: !!session, 
+        hasUser: !!session?.user,
+        error: error?.message 
+      });
+      
+      // Si on a une session avec un utilisateur, c'est bon
+      if (session?.user) {
+        debugLog('Session found', { userId: session.user.id });
         markReady();
         return;
       }
+      
+      await new Promise((r) => setTimeout(r, 200));
     }
-    if (!doneRef.current) markError();
+    
+    // Si on arrive ici, pas de session trouvée
+    if (!doneRef.current) {
+      debugLog('No session after retries', null);
+      markError();
+    }
   }, [markReady, markError]);
 
   useEffect(() => {
     doneRef.current = false;
+    debugLog('Mounting component', { 
+      hash: window.location.hash,
+      search: window.location.search 
+    });
 
+    // Écouter les changements d'état auth (PASSWORD_RECOVERY event)
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      debugLog('Auth state change', { event, hasUser: !!session?.user });
+      
       if (event === 'PASSWORD_RECOVERY' && session?.user) {
-        recoveryIntentRef.current = true;
+        markReady();
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        // Supabase a traité le token et créé une session
         markReady();
       }
     });
 
-    if (recoveryIntentRef.current) {
-      establishRecoverySession();
-    } else {
-      markError();
-    }
+    authListenerRef.current = data;
+
+    // Démarrer la vérification
+    verifyRecoverySession();
 
     return () => {
       data.subscription.unsubscribe();
     };
-  }, [establishRecoverySession, markError, markReady]);
+  }, [verifyRecoverySession, markReady]);
 
   const onSubmit = async ({ password }) => {
     try {
+      debugLog('Submitting new password', null);
       const { error } = await authService.updatePassword(password);
       if (error) {
+        debugLog('Update password error', error.message);
         toast.error(error.message || 'Impossible de mettre à jour le mot de passe');
         return;
       }
@@ -117,6 +139,7 @@ const ResetPassword = () => {
       setPhase('success');
       toast.success('Mot de passe mis à jour. Vous pouvez vous reconnecter.');
     } catch (e) {
+      debugLog('Submit exception', e.message);
       toast.error(e.message || 'Une erreur est survenue');
     }
   };
@@ -133,7 +156,7 @@ const ResetPassword = () => {
       >
         <div className="flex items-center justify-center mb-8">
           <Link to="/" className="flex items-center gap-2">
-            <img src="/assets/logo_app.png" alt="7rayfi" className="w-12 h-12 object-contain" />
+            <img src={logoApp} alt="7rayfi" className="w-12 h-12 object-contain" />
             <span className="text-xl font-bold text-white">7rayfi</span>
           </Link>
         </div>

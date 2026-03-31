@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Twitter, Mail, Phone, MapPin, Wrench } from 'lucide-react';
+import logoApp from '../../../assets/logo_app.png';
 
 const Footer = () => {
   return (
@@ -21,7 +22,7 @@ const Footer = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <div style={{ width: 90, height: 50, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
                 <img 
-                  src="/assets/logo_app.png" 
+                  src={logoApp} 
                   alt="7rayfi" 
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                 />

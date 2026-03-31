@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import logoApp from '/assets/logo_app.png';
+import logoApp from '../../assets/logo_app.png';
 import { supabase } from '../../core/services/supabaseClient';
 
 const VILLES = [

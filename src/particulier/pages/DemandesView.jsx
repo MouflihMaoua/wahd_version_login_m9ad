@@ -1,31 +1,76 @@
 /**
  * DemandesView - Vue Mes Demandes Envoyées
- * Liste des demandes envoyées aux artisans avec messagerie
+ * Liste des demandes envoyées aux artisans avec données réelles Supabase
  */
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Calendar, MapPin, Clock, User, Phone, Mail, Star, CheckCircle, XCircle, AlertCircle, Eye, Send, MessageCircle, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Search, Filter, Calendar, MapPin, Clock, User, Phone, Mail, CheckCircle, XCircle, AlertCircle, Loader2, MessageCircle, Star } from 'lucide-react';
+import { getInvitationsForParticulier } from '../../core/services/invitationService';
+import { useAuthStore } from '../../core/store/useAuthStore';
+import EvaluationForm from '../../shared/components/EvaluationForm';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 const DemandesView = () => {
   const [selectedDemande, setSelectedDemande] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('tous');
-  const [allDemandes, setAllDemandes] = useState([]);
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [messageText, setMessageText] = useState('');
+  const [demandes, setDemandes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [evaluationModal, setEvaluationModal] = useState({
+    isOpen: false,
+    artisanId: null,
+    artisanName: null
+  });
+  
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
 
-  // Charger les demandes depuis localStorage au montage
+  // Charger les demandes depuis Supabase
   useEffect(() => {
-    const demandesEnvoyees = JSON.parse(localStorage.getItem('demandesArtisans') || '[]');
-    setAllDemandes(demandesEnvoyees);
-  }, []);
+    const loadDemandes = async () => {
+      if (!user?.id) return;
+      
+      try {
+        setLoading(true);
+        const result = await getInvitationsForParticulier(user.id);
+        
+        if (result.success) {
+          const mappedDemandes = result.data.map(inv => ({
+            id: inv.id,
+            artisan: inv.artisan ? `${inv.artisan.prenom || ''} ${inv.artisan.nom || ''}`.trim() : 'Artisan',
+            service: inv.service,
+            description: inv.message || inv.description || 'Pas de description',
+            adresse: inv.description?.includes('Ville:') ? inv.description.split('Ville:')[1]?.split(',')[0] : 'Non spécifiée',
+            telephone: inv.artisan?.telephone || 'Non spécifié',
+            email: inv.artisan?.email || 'Non spécifié',
+            date: new Date(inv.created_at).toLocaleDateString('fr-FR'),
+            heure: new Date(inv.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            urgence: inv.description?.includes('Urgence:') ? inv.description.split('Urgence:')[1] : 'moyenne',
+            statut: inv.statut === 'pending' ? 'en_attente' : inv.statut === 'accepted' ? 'accepté' : 'refusé',
+            artisanMetier: inv.artisan?.specialite || inv.service,
+            rawData: inv
+          }));
+          setDemandes(mappedDemandes);
+        } else {
+          toast.error(result.error || 'Erreur lors du chargement des demandes');
+        }
+      } catch (err) {
+        console.error('Erreur chargement demandes:', err);
+        toast.error('Erreur lors du chargement des demandes');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDemandes();
+  }, [user?.id]);
 
   // Filtrer les demandes
-  const filteredDemandes = allDemandes.filter(demande => {
-    const matchesSearch = demande.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         demande.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredDemandes = demandes.filter(demande => {
+    const matchesSearch = demande.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          demande.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (demande.artisanName && demande.artisanName.toLowerCase().includes(searchTerm.toLowerCase()));
+                         demande.artisan.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'tous' || demande.statut === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -46,31 +91,52 @@ const DemandesView = () => {
   };
 
   const getUrgencyColor = (urgence) => {
-    switch (urgence) {
-      case 'basse':
-        return 'bg-green-100 text-green-800';
-      case 'moyenne':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'haute':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+    switch (urgence?.toLowerCase()) {
+      case 'basse': return 'bg-green-100 text-green-800';
+      case 'moyenne': return 'bg-yellow-100 text-yellow-800';
+      case 'haute': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleSendMessage = (demande) => {
-    if (!messageText.trim()) return;
-    
-    // Simuler l'envoi du message
-    alert(`Message envoyé à ${demande.artisanName}:\n\n"${messageText}"\n\n(Dans une vraie application, le message serait sauvegardé et envoyé)`);
-    setMessageText('');
-    setShowMessageModal(false);
+  const handleOuvrirConversation = (demande) => {
+    navigate('/dashboard/particulier/messages', { 
+      state: { 
+        demandeId: demande.id,
+        id_artisan: demande.rawData?.id_artisan,
+        from: 'demandes'
+      }
+    });
   };
 
-  const openMessageModal = (demande) => {
-    setSelectedDemande(demande);
-    setShowMessageModal(true);
+  const handleOpenEvaluation = (demande) => {
+    setEvaluationModal({
+      isOpen: true,
+      artisanId: demande.rawData?.id_artisan,
+      artisanName: demande.artisan
+    });
   };
+
+  const handleCloseEvaluation = () => {
+    setEvaluationModal({
+      isOpen: false,
+      artisanId: null,
+      artisanName: null
+    });
+  };
+
+  const handleEvaluationSuccess = () => {
+    toast.success('Évaluation envoyée avec succès !');
+    handleCloseEvaluation();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -116,7 +182,7 @@ const DemandesView = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total demandes</p>
-              <p className="text-2xl font-bold text-gray-900">{allDemandes.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{demandes.length}</p>
             </div>
             <div className="bg-blue-100 p-2 rounded-lg">
               <AlertCircle className="h-6 w-6 text-blue-600" />
@@ -127,7 +193,7 @@ const DemandesView = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">En attente</p>
-              <p className="text-2xl font-bold text-yellow-600">{allDemandes.filter(d => d.statut === 'en_attente').length}</p>
+              <p className="text-2xl font-bold text-yellow-600">{demandes.filter(d => d.statut === 'en_attente').length}</p>
             </div>
             <div className="bg-yellow-100 p-2 rounded-lg">
               <Clock className="h-6 w-6 text-yellow-600" />
@@ -138,7 +204,7 @@ const DemandesView = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Acceptées</p>
-              <p className="text-2xl font-bold text-green-600">{allDemandes.filter(d => d.statut === 'accepté').length}</p>
+              <p className="text-2xl font-bold text-green-600">{demandes.filter(d => d.statut === 'accepté').length}</p>
             </div>
             <div className="bg-green-100 p-2 rounded-lg">
               <CheckCircle className="h-6 w-6 text-green-600" />
@@ -149,7 +215,7 @@ const DemandesView = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Refusées</p>
-              <p className="text-2xl font-bold text-red-600">{allDemandes.filter(d => d.statut === 'refusé').length}</p>
+              <p className="text-2xl font-bold text-red-600">{demandes.filter(d => d.statut === 'refusé').length}</p>
             </div>
             <div className="bg-red-100 p-2 rounded-lg">
               <XCircle className="h-6 w-6 text-red-600" />
@@ -181,24 +247,17 @@ const DemandesView = () => {
                   </div>
                   
                   {/* Afficher les informations de l'artisan si disponible */}
-                  {demande.artisanName && (
-                    <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="flex items-center gap-3">
-                        {demande.artisanImage && (
-                          <img 
-                            src={demande.artisanImage} 
-                            alt={demande.artisanName}
-                            className="w-12 h-12 rounded-full object-cover"
-                          />
-                        )}
-                        <div>
-                          <p className="text-sm font-medium text-blue-900">Artisan:</p>
-                          <p className="text-sm text-blue-800">{demande.artisanName} - {demande.artisanMetier}</p>
-                          <p className="text-xs text-blue-600">{demande.artisanVille}</p>
-                        </div>
+                  <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                        <User className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-blue-900">Artisan:</p>
+                        <p className="text-sm text-blue-800">{demande.artisan} - {demande.artisanMetier}</p>
                       </div>
                     </div>
-                  )}
+                  </div>
                   
                   <p className="text-gray-600 mb-3">{demande.description}</p>
                   
@@ -219,15 +278,24 @@ const DemandesView = () => {
                     <p className="text-lg font-bold text-gray-900">{demande.prix}</p>
                   </div>
                   
-                  {/* Bouton de messagerie - seulement si la demande est acceptée */}
+                  {/* Boutons pour demandes acceptées */}
                   {demande.statut === 'accepté' && (
-                    <button
-                      onClick={() => openMessageModal(demande)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      Envoyer message
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleOuvrirConversation(demande)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Discuter
+                      </button>
+                      <button
+                        onClick={() => handleOpenEvaluation(demande)}
+                        className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center justify-center gap-2"
+                      >
+                        <Star className="h-4 w-4" />
+                        Évaluer
+                      </button>
+                    </>
                   )}
                   
                   {/* Indicateur pour les autres statuts */}
@@ -262,81 +330,20 @@ const DemandesView = () => {
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Aucune demande trouvée</h3>
             <p className="text-gray-600 max-w-md mx-auto mb-6">
-              Vous n'avez pas encore envoyé de demande. Utilisez le formulaire ci-dessus pour envoyer votre première demande.
+              Vous n'avez pas encore envoyé de demande. Recherchez un artisan et envoyez-lui une demande.
             </p>
           </div>
         )}
       </div>
 
-      {/* Modal de messagerie */}
-      <AnimatePresence>
-        {showMessageModal && selectedDemande && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowMessageModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-lg w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Envoyer un message</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    À: <span className="font-medium text-blue-600">{selectedDemande.artisanName}</span>
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowMessageModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X size={20} className="text-gray-500" />
-                </button>
-              </div>
-
-              {/* Message */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Votre message
-                  </label>
-                  <textarea
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                    placeholder="Écrivez votre message ici..."
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    rows="4"
-                  ></textarea>
-                </div>
-
-                {/* Boutons d'action */}
-                <div className="flex justify-end gap-3">
-                  <button
-                    onClick={() => setShowMessageModal(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={() => handleSendMessage(selectedDemande)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                  >
-                    <Send size={16} />
-                    Envoyer
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Modal d'évaluation */}
+      <EvaluationForm
+        isOpen={evaluationModal.isOpen}
+        onClose={handleCloseEvaluation}
+        artisanId={evaluationModal.artisanId}
+        artisanName={evaluationModal.artisanName}
+        onSuccess={handleEvaluationSuccess}
+      />
     </div>
   );
 };

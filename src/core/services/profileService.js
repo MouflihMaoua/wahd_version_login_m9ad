@@ -52,7 +52,7 @@ export const profileService = {
             email: particulier.email_particulier,
             telephone: particulier.telephone_particulier,
             ville: particulier.ville,
-            codePostal: particulier.code_postale_particulier,
+            codePostal: particulier.code_postale,
             cin: particulier.cin,
             sexe: particulier.sexe
           }
@@ -102,6 +102,7 @@ export const profileService = {
   // Mettre à jour le profil particulier
   async updateParticulierProfile(userId, profileData) {
     try {
+      console.log('📝 Updating particulier profile:', profileData);
       const { data, error } = await supabase
         .from('particulier')
         .update({
@@ -110,7 +111,7 @@ export const profileService = {
           email_particulier: profileData.email,
           telephone_particulier: profileData.telephone,
           ville: profileData.ville,
-          code_postale_particulier: profileData.codePostal,
+          code_postale: profileData.codePostal,
           cin: profileData.cin,
           sexe: profileData.sexe
         })
@@ -118,7 +119,11 @@ export const profileService = {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Update particulier error:', error);
+        throw error;
+      }
+      console.log('✅ Particulier updated:', data);
       return data;
     } catch (error) {
       console.error('Erreur updateParticulierProfile:', error);

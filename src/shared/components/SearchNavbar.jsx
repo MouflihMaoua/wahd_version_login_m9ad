@@ -5,6 +5,7 @@ import {
   Menu, X, Wrench, ChevronDown, User, MessageSquare, 
   Calendar, Settings, LogOut, Search, Bell, Home 
 } from 'lucide-react';
+import logoApp from '../../assets/logo_app.png';
 
 const NAV_LINKS = [
   { 
@@ -54,7 +55,7 @@ export default function SearchNavbar() {
             {/* Logo */}
             <div className="flex items-center">
               <Link to="/" className="flex items-center gap-2">
-                <img src="/assets/logo_app.png" alt="7rayfi_logo" className="w-16 h-16 object-contain" />
+                <img src={logoApp} alt="7rayfi_logo" className="w-16 h-16 object-contain" />
                 <span className="text-xl font-bold text-gray-900"></span>
               </Link>
             </div>
@@ -154,7 +155,7 @@ export default function SearchNavbar() {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
-              <img src="/assets/logo_app.png" alt="7rayfi_logo" className="w-14 h-14 object-contain" />
+              <img src={logoApp} alt="7rayfi_logo" className="w-14 h-14 object-contain" />
               <span className="text-xl font-bold text-gray-900">7rayfi</span>
             </Link>
 

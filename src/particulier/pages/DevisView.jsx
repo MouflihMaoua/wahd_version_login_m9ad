@@ -207,6 +207,22 @@ const DevisCard = ({ devis, index, onStatusChange }) => {
             {devis.statut === 'expiré'  && <><Clock size={13} /> Ce devis a expiré</>}
           </div>
         )}
+
+        {/* Payment button - only shown when devis is accepted */}
+        {devis.statut === 'accepté' && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <button
+              onClick={() => toast.info('Redirection vers la page de paiement...')}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-sm font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg"
+            >
+              <DollarSign size={18} />
+              Procéder au paiement
+            </button>
+            <p className="text-xs text-gray-400 text-center mt-2">
+              Paiement sécurisé via notre plateforme
+            </p>
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -226,10 +242,11 @@ const DevisView = () => {
     setLoading(true);
     setError(null);
     try {
-      // Query devis where id_particulier matches OR email matches
+      // Query devis where id_particulier matches
       const { data, error: sbError } = await supabase
         .from('devis')
         .select('*')
+        .eq('id_particulier', user.id)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 

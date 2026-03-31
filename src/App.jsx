@@ -103,7 +103,7 @@ function App() {
               <Route path="/inscription" element={<PublicLayout><RegisterManual /></PublicLayout>} />
               <Route path="/inscription/artisan" element={<PublicLayout><RegisterArtisan /></PublicLayout>} />
               <Route path="/mot-de-passe-oublie" element={<PublicLayout><ForgotPassword /></PublicLayout>} />
-              <Route path="/reinitialiser-mot-de-passe" element={<PublicLayout><ResetPassword /></PublicLayout>} />
+              <Route path="/reset-password" element={<PublicLayout><ResetPassword /></PublicLayout>} />
 
               {/* ── Routes Particulier (utilisent ParticulierLayout) ───────────────────────── */}
               <Route path="/dashboard/particulier/*" element={

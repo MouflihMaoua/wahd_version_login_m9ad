@@ -169,24 +169,35 @@ export async function fetchDevisList({ page = 0, pageSize = 12, statut = 'tous',
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
-  let q = supabase
-    .from('devis')
-    .select('*', { count: 'exact' })
-    .order('created_at', ORDER_RECENT)
-    .range(from, to);
+  try {
+    let q = supabase
+      .from('devis')
+      .select('id, service, description, statut, montant_ttc, id_artisan, id_particulier, date_creation, created_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
-  if (statut !== 'tous') {
-    q = q.eq('statut', statut);
+    if (statut !== 'tous') {
+      q = q.eq('statut', statut);
+    }
+
+    if (search.trim()) {
+      const t = `%${search.trim()}%`;
+      q = q.or(`service.ilike.${t},description.ilike.${t}`);
+    }
+
+    const { data, error, count } = await q;
+    
+    if (error) {
+      console.error('Erreur fetchDevisList:', error);
+      throw new Error(error.message);
+    }
+    
+    console.log('Devis récupérés:', data?.length || 0, 'Total:', count);
+    return { rows: data ?? [], total: count ?? 0 };
+  } catch (err) {
+    console.error('Exception fetchDevisList:', err);
+    throw err;
   }
-
-  if (search.trim()) {
-    const t = `%${search.trim()}%`;
-    q = q.or(`service.ilike.${t},numero_devis.ilike.${t},description.ilike.${t}`);
-  }
-
-  const { data, error, count } = await q;
-  if (error) throw new Error(error.message);
-  return { rows: data ?? [], total: count ?? 0 };
 }
 
 export async function fetchAvisList({ page = 0, pageSize = 15, search = '' }) {
@@ -194,23 +205,48 @@ export async function fetchAvisList({ page = 0, pageSize = 15, search = '' }) {
   const to = from + pageSize - 1;
 
   let q = supabase
-    .from('avis')
-    .select('*', { count: 'exact' })
-    .order('date_avis', ORDER_RECENT)
+    .from('evaluation')
+    .select(`
+      id_evaluation,
+      id_artisan,
+      id_particulier,
+      note,
+      commentaire,
+      date_evaluation,
+      particulier:particulier(nom_particulier, prenom_particulier, email_particulier)
+    `, { count: 'exact' })
+    .order('date_evaluation', ORDER_RECENT)
     .range(from, to);
 
   if (search.trim()) {
     const t = `%${search.trim()}%`;
-    q = q.or(`nom_client.ilike.${t},commentaire.ilike.${t},service_type.ilike.${t}`);
+    q = q.or(`commentaire.ilike.${t},particulier.nom_particulier.ilike.${t},particulier.prenom_particulier.ilike.${t}`);
   }
 
   const { data, error, count } = await q;
   if (error) throw new Error(error.message);
-  return { rows: data ?? [], total: count ?? 0 };
+  
+  // Transform data to match expected format
+  const rows = (data ?? []).map(item => ({
+    id: item.id_evaluation,
+    id_artisan: item.id_artisan,
+    id_particulier: item.id_particulier,
+    note: item.note,
+    commentaire: item.commentaire,
+    date_avis: item.date_evaluation,
+    nom_client: item.particulier 
+      ? `${item.particulier.prenom_particulier || ''} ${item.particulier.nom_particulier || ''}`.trim()
+      : 'Anonyme',
+    email_client: item.particulier?.email_particulier,
+    service_type: 'Service', // Default since evaluation doesn't have service field
+    created_at: item.date_evaluation
+  }));
+  
+  return { rows, total: count ?? 0 };
 }
 
 export async function deleteAvis(id) {
-  const { error } = await supabase.from('avis').delete().eq('id', id);
+  const { error } = await supabase.from('evaluation').delete().eq('id_evaluation', id);
   if (error) throw new Error(error.message);
 }
 

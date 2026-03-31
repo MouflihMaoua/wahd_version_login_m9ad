@@ -16,5 +16,5 @@ export function getSiteOrigin() {
 /** Full URL where Supabase sends the user after clicking the reset link */
 export function getPasswordResetRedirectUrl() {
   const base = getSiteOrigin();
-  return `${base}/reinitialiser-mot-de-passe`;
+  return `${base}/reset-password`;
 }

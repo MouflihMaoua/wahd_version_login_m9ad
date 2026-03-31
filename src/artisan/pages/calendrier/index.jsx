@@ -1,252 +1,276 @@
 // pages/artisan/calendrier/index.jsx
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import frLocale from '@fullcalendar/core/locales/fr';
-import { SERVICES_ARTISAN } from '../../../core/constants/services';
+import { 
+  X, 
+  MapPin, 
+  Phone, 
+  Mail, 
+  Calendar as CalendarIcon,
+  Clock,
+  User,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  RefreshCw,
+  Briefcase,
+  Navigation
+} from 'lucide-react';
+import { supabase } from '../../../core/services/supabaseClient';
+import toast from 'react-hot-toast';
 
 export default function Calendrier() {
-  const [events, setEvents] = useState([
-    {
-      id: '1',
-      title: 'Réparation fuite - Jean D.',
-      start: '2024-01-15T10:00:00',
-      end: '2024-01-15T12:00:00',
-      backgroundColor: '#3b82f6'
-    },
-    {
-      id: '2',
-      title: 'Installation chauffe-eau - Marie M.',
-      start: '2024-01-15T14:00:00',
-      end: '2024-01-15T17:00:00',
-      backgroundColor: '#10b981'
-    },
-    {
-      id: '3',
-      title: 'Dépannage électrique - Pierre D.',
-      start: '2024-01-16T09:00:00',
-      end: '2024-01-16T11:00:00',
-      backgroundColor: '#f59e0b'
-    }
-  ]);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [currentView, setCurrentView] = useState('timeGridWeek');
 
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({
-    client: '',
-    service: '',
-    startTime: '',
-    endTime: '',
-    address: '',
-    notes: ''
-  });
-
-  // États pour la section Demandes
-  const [demandes, setDemandes] = useState([
-    {
-      id: '1',
-      client: 'Sophie Martin',
-      metier: 'Plombier',
-      probleme: 'Fuite d\'eau dans la cuisine',
-      date: '2024-01-20',
-      statut: 'en_attente'
-    },
-    {
-      id: '2',
-      client: 'Marc Dubois',
-      metier: 'Électricien',
-      probleme: 'Installation de prises électriques',
-      date: '2024-01-21',
-      statut: 'en_attente'
-    },
-    {
-      id: '3',
-      client: 'Julie Petit',
-      metier: 'Peintre',
-      probleme: 'Peinture des murs du salon',
-      date: '2024-01-22',
-      statut: 'en_attente'
-    }
-  ]);
-
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMetier, setSelectedMetier] = useState('');
-  const [problemeDescription, setProblemeDescription] = useState('');
-  const [showDemandeModal, setShowDemandeModal] = useState(false);
-  const [selectedDemande, setSelectedDemande] = useState(null);
-
-  const handleDateClick = (arg) => {
-    setSelectedDate(arg.date);
-    setShowModal(true);
-  };
-
-  const handleEventDrop = (info) => {
-    // Mettre à jour l'événement dans la base de données
-    console.log('Événement déplacé:', info.event);
-  };
-
-  const handleEventClick = (info) => {
-    // Afficher les détails de l'intervention
-    console.log('Détails intervention:', info.event);
-  };
-
-  const toggleDisponibilite = (date, disponible) => {
-    // Marquer un jour comme disponible/indisponible
-    console.log('Jour:', date, disponible ? 'Disponible' : 'Indisponible');
-  };
-
-  // Fonctions pour la gestion des demandes
-  const handleSearchArtisan = (e) => {
-    setSearchTerm(e.target.value);
-  };
-
-  const handleSelectDemande = (demande) => {
-    setSelectedDemande(demande);
-    setShowDemandeModal(true);
-  };
-
-  const handleAccepterDemande = (demandeId) => {
-    // Mettre à jour le statut de la demande
-    setDemandes(prev => 
-      prev.map(d => 
-        d.id === demandeId 
-          ? { ...d, statut: 'acceptee' }
-          : d
-      )
-    );
-    setShowDemandeModal(false);
-    alert('Demande acceptée avec succès !');
-  };
-
-  const handleRefuserDemande = (demandeId) => {
-    // Mettre à jour le statut de la demande
-    setDemandes(prev => 
-      prev.map(d => 
-        d.id === demandeId 
-          ? { ...d, statut: 'refusee' }
-          : d
-      )
-    );
-    setShowDemandeModal(false);
-    alert('Demande refusée.');
-  };
-
-  const handleSubmitProbleme = (e) => {
-    e.preventDefault();
-    
-    if (!selectedMetier || !problemeDescription) {
-      alert('Veuillez sélectionner un métier et décrire le problème.');
-      return;
-    }
-
-    // Simuler l'envoi du problème
-    alert('Problème soumis avec succès ! Un artisan vous contactera bientôt.');
-    setProblemeDescription('');
-    setSelectedMetier('');
-  };
-
-  // Filtrer les artisans par métier
-  const metiers = SERVICES_ARTISAN;
-  const filteredDemandes = demandes.filter(demande => 
-    demande.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    demande.metier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    demande.probleme.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleNewIntervention = () => {
-    setShowModal(true);
-    // Réinitialiser le formulaire
-    const now = new Date();
-    const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    
-    setFormData({
-      client: '',
-      service: '',
-      startTime: localDateTime,
-      endTime: localDateTime,
-      address: '',
-      notes: ''
-    });
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const validateDateTime = (dateTime) => {
-    const selectedDateTime = new Date(dateTime);
-    const now = new Date();
-    return selectedDateTime >= now;
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Obtenir la date actuelle pour l'attribut min
-    const now = new Date();
-    const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    
-    // Validation des dates
-    if (!validateDateTime(formData.startTime) || !validateDateTime(formData.endTime)) {
-      alert('Les dates ne peuvent pas être dans le passé. Veuillez sélectionner des dates futures.');
-      return;
-    }
-
-    if (new Date(formData.endTime) <= new Date(formData.startTime)) {
-      alert('La date de fin doit être postérieure à la date de début.');
-      return;
-    }
-    
-    // Créer un nouvel événement
-    const newEvent = {
-      id: Date.now().toString(),
-      title: `${formData.service} - ${formData.client}`,
-      start: formData.startTime,
-      end: formData.endTime,
-      backgroundColor: '#3b82f6'
+  // Récupérer l'ID de l'artisan connecté
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        setUserId(session.user.id);
+      }
     };
+    getUser();
+  }, []);
 
-    // Ajouter l'événement à la liste
-    setEvents(prev => [...prev, newEvent]);
+  // Fonction pour charger les demandes acceptées
+  const loadAcceptedDemandes = useCallback(async () => {
+    if (!userId) return;
     
-    // Fermer la modal et réinitialiser le formulaire
-    setShowModal(false);
-    setFormData({
-      client: '',
-      service: '',
-      startTime: localDateTime,
-      endTime: localDateTime,
-      address: '',
-      notes: ''
+    try {
+      setLoading(true);
+      
+      // Récupérer les demandes acceptées (simplifié sans jointure)
+      const { data: demandes, error } = await supabase
+        .from('demande')
+        .select('id_demande, description, date_demande, statut, urgence, id_particulier')
+        .eq('id_artisan', userId)
+        .in('statut', ['acceptee', 'en_cours', 'terminee'])
+        .order('date_demande', { ascending: true });
+
+      if (error) throw error;
+
+      // Transformer les demandes en événements calendrier
+      const calendarEvents = demandes?.map(demande => {
+        const date = new Date(demande.date_demande);
+        const nomComplet = 'Client';
+        
+        // Déterminer la couleur selon l'urgence
+        let backgroundColor = '#3b82f6'; // bleu par défaut
+        let borderColor = '#2563eb';
+        
+        if (demande.urgence === 'urgent') {
+          backgroundColor = '#ef4444'; // rouge
+          borderColor = '#dc2626';
+        } else if (demande.urgence === 'haute') {
+          backgroundColor = '#f97316'; // orange
+          borderColor = '#ea580c';
+        } else if (demande.statut === 'terminee') {
+          backgroundColor = '#10b981'; // vert
+          borderColor = '#059669';
+        }
+
+        return {
+          id: demande.id_demande,
+          title: `Intervention - ${nomComplet}`,
+          start: date.toISOString(),
+          end: new Date(date.getTime() + 2 * 60 * 60 * 1000).toISOString(), // +2h par défaut
+          backgroundColor,
+          borderColor,
+          textColor: '#ffffff',
+          extendedProps: {
+            ...demande,
+            nomComplet
+          }
+        };
+      }) || [];
+
+      setEvents(calendarEvents);
+      
+    } catch (err) {
+      console.error('Erreur chargement calendrier:', err);
+      toast.error('Erreur lors du chargement du calendrier');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  // Charger les données au montage
+  useEffect(() => {
+    if (userId) {
+      loadAcceptedDemandes();
+    }
+  }, [userId, loadAcceptedDemandes]);
+
+  // Souscription temps réel aux changements de demandes
+  useEffect(() => {
+    if (!userId) return;
+
+    const subscription = supabase
+      .channel('demandes_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'demande',
+          filter: `id_artisan=eq.${userId}`
+        },
+        (payload) => {
+          console.log('Changement détecté:', payload);
+          loadAcceptedDemandes(); // Recharger automatiquement
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [userId, loadAcceptedDemandes]);
+
+  // Gestion clic sur un événement
+  const handleEventClick = (info) => {
+    info.jsEvent.preventDefault();
+    setSelectedEvent(info.event.extendedProps);
+    setShowEventModal(true);
+  };
+
+  // Gestion clic sur une date
+  const handleDateClick = (arg) => {
+    // Optionnel: créer un nouvel événement manuel
+    console.log('Date cliquée:', arg.date);
+  };
+
+  // Rafraîchissement manuel
+  const handleRefresh = async () => {
+    await loadAcceptedDemandes();
+    toast.success('Calendrier actualisé');
+  };
+
+  // Formater la date pour l'affichage
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Non définie';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
+
+  // Obtenir le badge d'urgence
+  const getUrgenceBadge = (urgence) => {
+    const styles = {
+      'urgent': 'bg-red-100 text-red-800 border-red-200',
+      'haute': 'bg-orange-100 text-orange-800 border-orange-200',
+      'normale': 'bg-blue-100 text-blue-800 border-blue-200',
+      'basse': 'bg-green-100 text-green-800 border-green-200'
+    };
+    return styles[urgence] || styles['normale'];
+  };
+
+  // Obtenir le badge de statut
+  const getStatutBadge = (statut) => {
+    const styles = {
+      'acceptee': 'bg-green-100 text-green-800 border-green-200',
+      'en_cours': 'bg-blue-100 text-blue-800 border-blue-200',
+      'terminee': 'bg-gray-100 text-gray-800 border-gray-200'
+    };
+    return styles[statut] || 'bg-gray-100 text-gray-800';
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-2" />
+            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 h-96 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6"
+      >
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Calendrier</h1>
-          <p className="text-gray-600">Gérez vos interventions et disponibilités</p>
+          <h1 className="text-2xl font-bold text-gray-900">Mon Calendrier</h1>
+          <p className="text-gray-600">
+            {events.length} intervention{events.length > 1 ? 's' : ''} programmée{events.length > 1 ? 's' : ''}
+          </p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex gap-3">
           <button 
-            onClick={handleNewIntervention}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            onClick={handleRefresh}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            + Nouvelle intervention
+            <RefreshCw className="h-4 w-4" />
+            Actualiser
+          </button>
+          <button 
+            onClick={() => setCurrentView(currentView === 'timeGridWeek' ? 'dayGridMonth' : 'timeGridWeek')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            {currentView === 'timeGridWeek' ? 'Vue Mois' : 'Vue Semaine'}
           </button>
         </div>
-      </div>
+      </motion.div>
+
+      {/* Légende */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        className="flex flex-wrap gap-4 mb-4 text-sm"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-red-500" />
+          <span>Urgent</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-orange-500" />
+          <span>Haute priorité</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-blue-500" />
+          <span>Normale</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-green-500" />
+          <span>Terminée</span>
+        </div>
+      </motion.div>
 
       {/* Calendrier */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+      >
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           headerToolbar={{
@@ -254,7 +278,7 @@ export default function Calendrier() {
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
           }}
-          initialView="timeGridWeek"
+          initialView={currentView}
           locale={frLocale}
           events={events}
           editable={true}
@@ -263,309 +287,144 @@ export default function Calendrier() {
           dayMaxEvents={true}
           weekends={true}
           dateClick={handleDateClick}
-          eventDrop={handleEventDrop}
           eventClick={handleEventClick}
           height="auto"
           slotMinTime="08:00:00"
           slotMaxTime="20:00:00"
           allDaySlot={false}
           slotDuration="00:30:00"
+          nowIndicator={true}
+          eventTimeFormat={{
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          }}
         />
-      </div>
+      </motion.div>
 
-      {/* Section Demandes */}
-      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Demandes des clients</h2>
-          <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-            <a href="https://www.travaux.com/publiez-votre-projet/cloture" target="_blank" rel="noopener noreferrer" className="flex items-center">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H8m8 8l-8-8" />
-              </svg>
-              Envoyer une demande
-            </a>
-          </button>
-        </div>
-
-        {/* Recherche d'artisans */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Rechercher un artisan</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Métier
-              </label>
-              <select
-                value={selectedMetier}
-                onChange={(e) => setSelectedMetier(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              >
-                <option value="">Sélectionner un métier</option>
-                {metiers.map(metier => (
-                  <option key={metier} value={metier}>{metier}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description du problème
-              </label>
-              <textarea
-                value={problemeDescription}
-                onChange={(e) => setProblemeDescription(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                rows="3"
-                placeholder="Décrivez précisément le problème à résoudre..."
-              ></textarea>
-            </div>
-          </div>
-          <button
-            onClick={handleSubmitProbleme}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+      {/* Modal Détails de l'intervention */}
+      <AnimatePresence>
+        {showEventModal && selectedEvent && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowEventModal(false)}
           >
-            Soumettre le problème
-          </button>
-        </div>
-
-        {/* Liste des demandes */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Demandes en attente</h3>
-          
-          {/* Barre de recherche */}
-          <div className="mb-4">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={handleSearchArtisan}
-              placeholder="Rechercher par client, métier ou problème..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
-            />
-          </div>
-
-          {/* Liste des demandes filtrées */}
-          <div className="space-y-3">
-            {filteredDemandes.map(demande => (
-              <div key={demande.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center mb-2">
-                      <span className="font-semibold text-gray-900">{demande.client}</span>
-                      <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
-                        demande.statut === 'en_attente' ? 'bg-yellow-100 text-yellow-800' :
-                        demande.statut === 'acceptee' ? 'bg-green-100 text-green-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {demande.statut === 'en_attente' ? 'En attente' :
-                         demande.statut === 'acceptee' ? 'Acceptée' : 'Refusée'}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      <p><span className="font-medium">Métier:</span> {demande.metier}</p>
-                      <p><span className="font-medium">Problème:</span> {demande.probleme}</p>
-                      <p><span className="font-medium">Date:</span> {demande.date}</p>
-                    </div>
-                  </div>
-                  <div className="ml-4">
-                    <button
-                      onClick={() => handleSelectDemande(demande)}
-                      className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                    >
-                      Voir détails
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Modal pour les détails de la demande */}
-      {showDemandeModal && selectedDemande && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Détails de la demande</h2>
-              <button
-                onClick={() => setShowDemandeModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Informations client</h3>
-                <div className="space-y-2">
-                  <p><span className="font-medium">Nom:</span> {selectedDemande.client}</p>
-                  <p><span className="font-medium">Date:</span> {selectedDemande.date}</p>
-                  <p><span className="font-medium">Statut:</span> 
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      selectedDemande.statut === 'en_attente' ? 'bg-yellow-100 text-yellow-800' :
-                      selectedDemande.statut === 'acceptee' ? 'bg-green-100 text-green-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {selectedDemande.statut === 'en_attente' ? 'En attente' :
-                       selectedDemande.statut === 'acceptee' ? 'Acceptée' : 'Refusée'}
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Intervention
+                    </h2>
+                    <span className={`px-2 py-1 text-xs rounded-full border ${getUrgenceBadge(selectedEvent.urgence)}`}>
+                      {selectedEvent.urgence === 'urgent' ? 'Urgent' : 
+                       selectedEvent.urgence === 'haute' ? 'Haute' : 
+                       selectedEvent.urgence === 'basse' ? 'Basse' : 'Normale'}
                     </span>
-                  </p>
+                  </div>
+                  <span className={`px-2 py-1 text-xs rounded-full border ${getStatutBadge(selectedEvent.statut)}`}>
+                    {selectedEvent.statut === 'acceptee' ? 'Acceptée' :
+                     selectedEvent.statut === 'en_cours' ? 'En cours' :
+                     selectedEvent.statut === 'terminee' ? 'Terminée' : selectedEvent.statut}
+                  </span>
                 </div>
+                <button
+                  onClick={() => setShowEventModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="h-5 w-5 text-gray-500" />
+                </button>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Détails de la demande</h3>
-                <div className="space-y-2">
-                  <p><span className="font-medium">Métier recherché:</span> {selectedDemande.metier}</p>
-                  <p><span className="font-medium">Description:</span></p>
-                  <div className="bg-gray-50 rounded-lg p-3 mt-2">
-                    <p className="text-gray-700">{selectedDemande.probleme}</p>
+
+              {/* Contenu */}
+              <div className="space-y-6">
+                {/* Date et heure */}
+                <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl">
+                  <CalendarIcon className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-gray-900">Date prévue</p>
+                    <p className="text-gray-600">{formatDate(selectedEvent.date_demande)}</p>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => setShowDemandeModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Fermer
-              </button>
-              {selectedDemande.statut === 'en_attente' && (
-                <>
-                  <button
-                    onClick={() => handleRefuserDemande(selectedDemande.id)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    Refuser la demande
-                  </button>
-                  <button
-                    onClick={() => handleAccepterDemande(selectedDemande.id)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    Accepter la demande
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal pour ajouter une intervention */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Nouvelle intervention</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Client
-                </label>
-                <select 
-                  name="client"
-                  value={formData.client}
-                  onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  required
-                >
-                  <option value="">Sélectionner un client</option>
-                  <option value="Jean Dupont">Jean Dupont</option>
-                  <option value="Marie Martin">Marie Martin</option>
-                  <option value="Pierre Durand">Pierre Durand</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Service
-                </label>
-                <input
-                  name="service"
-                  type="text"
-                  value={formData.service}
-                  onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Type d'intervention"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+                {/* Client */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Début
-                  </label>
-                  <input
-                    name="startTime"
-                    type="datetime-local"
-                    value={formData.startTime}
-                    onChange={handleInputChange}
-                    min={new Date().toISOString().slice(0, 16)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    required
-                  />
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Client
+                  </h3>
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="font-bold text-blue-600">
+                          {selectedEvent.nomComplet?.charAt(0) || 'C'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{selectedEvent.nomComplet}</p>
+                        <p className="text-sm text-gray-500">ID: {selectedEvent.id_particulier?.slice(0, 8) || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fin
-                  </label>
-                  <input
-                    name="endTime"
-                    type="datetime-local"
-                    value={formData.endTime}
-                    onChange={handleInputChange}
-                    min={new Date().toISOString().slice(0, 16)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    required
-                  />
+
+                {/* Description */}
+                {selectedEvent.description && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Briefcase className="h-4 w-4" />
+                      Description de la demande
+                    </h3>
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <p className="text-gray-700 whitespace-pre-wrap">{selectedEvent.description}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-4 border-t">
+                  <button
+                    onClick={() => setShowEventModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Fermer
+                  </button>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Adresse
-                </label>
-                <input
-                  name="address"
-                  type="text"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Adresse complète"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  name="notes"
-                  value={formData.notes}
-                  onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  rows="3"
-                  placeholder="Informations supplémentaires..."
-                ></textarea>
-              </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Créer l'intervention
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Message si aucun événement */}
+      {events.length === 0 && !loading && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-8 text-center"
+        >
+          <CalendarIcon className="h-12 w-12 text-blue-400 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-blue-900 mb-2">Aucune intervention programmée</h3>
+          <p className="text-blue-700 max-w-md mx-auto">
+            Les demandes que vous acceptez apparaîtront automatiquement ici.
+          </p>
+          <a
+            href="/dashboard/artisan/demandes"
+            className="inline-block mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Voir les demandes
+          </a>
+        </motion.div>
       )}
     </div>
   );

@@ -41,7 +41,7 @@ export const createInvitation = async (invitationData) => {
     // Vérifier que l'artisan existe
     const { data: artisan } = await supabase
       .from('artisan')
-      .select('id_artisan, nom, prenom')
+      .select('id_artisan, nom_artisan, prenom_artisan')
       .eq('id_artisan', invitationData.id_artisan)
       .single();
     
@@ -49,46 +49,47 @@ export const createInvitation = async (invitationData) => {
       throw new Error('Artisan non trouvé');
     }
     
-    // Vérifier si une invitation en attente existe déjà
-    const { data: existingInvitation } = await supabase
-      .from('invitations')
-      .select('id')
+    // Vérifier si une demande en attente existe déjà
+    const { data: existingDemande } = await supabase
+      .from('demande')
+      .select('id_demande')
       .eq('id_particulier', user.id)
       .eq('id_artisan', invitationData.id_artisan)
-      .eq('statut', 'en attente')
-      .is('deleted_at', null)
+      .eq('statut', 'pending')
       .single();
     
-    if (existingInvitation) {
-      throw new Error('Une invitation est déjà en attente pour cet artisan');
+    if (existingDemande) {
+      throw new Error('Une demande est déjà en attente pour cet artisan');
     }
     
-    // Préparation des données pour l'insertion
-    const invitationToInsert = {
+    // Préparation des données pour l'insertion (mapper vers la structure de la table demande)
+    const demandeToInsert = {
       id_particulier: user.id,
       id_artisan: invitationData.id_artisan,
-      service: invitationData.service.trim(),
-      message: invitationData.message.trim(),
-      description: invitationData.description?.trim() || null,
-      statut: 'en attente',
+      description: invitationData.message.trim(),
+      ville: invitationData.description?.includes('Ville:') ? invitationData.description.split('Ville:')[1]?.split(',')[0]?.trim() : null,
+      code_postal: invitationData.description?.includes('Code postal:') ? invitationData.description.split('Code postal:')[1]?.split(',')[0]?.trim() : null,
+      urgence: invitationData.description?.includes('Urgence:') ? invitationData.description.split('Urgence:')[1]?.trim() : 'moyenne',
+      statut: 'pending',
+      date_demande: new Date().toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
     
     // Insertion dans la base de données
     const { data, error } = await supabase
-      .from('invitations')
-      .insert([invitationToInsert])
+      .from('demande')
+      .insert([demandeToInsert])
       .select(`
         *,
-        artisan:artisan!invitations_id_artisan_fkey(
-          nom,
-          prenom,
-          specialite
+        artisan:artisan!demande_id_artisan_fkey(
+          nom_artisan,
+          prenom_artisan,
+          metier
         ),
-        particulier:particulier!invitations_id_particulier_fkey(
-          nom,
-          prenom
+        particulier:particulier!demande_id_particulier_fkey(
+          nom_particulier,
+          prenom_particulier
         )
       `)
       .single();
@@ -132,18 +133,15 @@ export const createInvitation = async (invitationData) => {
 export const getInvitationsForArtisan = async (artisanId, options = {}) => {
   try {
     let query = supabase
-      .from('invitations')
+      .from('demande')
       .select(`
         *,
-        particulier:particulier!invitations_id_particulier_fkey(
-          nom,
-          prenom,
-          email,
-          telephone
+        particulier:particulier!demande_id_particulier_fkey(
+          nom_particulier,
+          prenom_particulier
         )
       `)
-      .eq('id_artisan', artisanId)
-      .is('deleted_at', null);
+      .eq('id_artisan', artisanId);
     
     // Filtrage par statut
     if (options.statut) {
@@ -161,23 +159,30 @@ export const getInvitationsForArtisan = async (artisanId, options = {}) => {
     const { data, error } = await query;
     
     if (error) {
-      console.error('❌ Erreur lors de la récupération des invitations:', error);
-      throw new Error('Erreur lors de la récupération des invitations: ' + error.message);
+      console.error('❌ Erreur lors de la récupération des demandes:', error);
+      throw new Error('Erreur lors de la récupération des demandes: ' + error.message);
     }
     
-    console.log('✅ Invitations récupérées:', data?.length || 0, 'invitations');
+    // Mapper les données pour compatibilité
+    const mappedData = data?.map(d => ({
+      ...d,
+      id: d.id_demande,
+      service: d.description?.substring(0, 50) || 'Demande'
+    })) || [];
+    
+    console.log('✅ Demandes récupérées:', mappedData?.length || 0, 'demandes');
     
     return {
       success: true,
-      data: data || [],
-      count: data?.length || 0
+      data: mappedData,
+      count: mappedData?.length || 0
     };
     
   } catch (error) {
-    console.error('💥 Erreur lors de la récupération des invitations:', error);
+    console.error('💥 Erreur lors de la récupération des demandes:', error);
     return {
       success: false,
-      error: error.message || 'Erreur lors de la récupération des invitations'
+      error: error.message || 'Erreur lors de la récupération des demandes'
     };
   }
 };
@@ -191,18 +196,16 @@ export const getInvitationsForArtisan = async (artisanId, options = {}) => {
 export const getInvitationsForParticulier = async (particulierId, options = {}) => {
   try {
     let query = supabase
-      .from('invitations')
+      .from('demande')
       .select(`
         *,
-        artisan:artisan!invitations_id_artisan_fkey(
-          nom,
-          prenom,
-          specialite,
-          email
+        artisan:artisan!demande_id_artisan_fkey(
+          nom_artisan,
+          prenom_artisan,
+          metier
         )
       `)
-      .eq('id_particulier', particulierId)
-      .is('deleted_at', null);
+      .eq('id_particulier', particulierId);
     
     // Filtrage par statut
     if (options.statut) {
@@ -220,23 +223,30 @@ export const getInvitationsForParticulier = async (particulierId, options = {}) 
     const { data, error } = await query;
     
     if (error) {
-      console.error('❌ Erreur lors de la récupération des invitations:', error);
-      throw new Error('Erreur lors de la récupération des invitations: ' + error.message);
+      console.error('❌ Erreur lors de la récupération des demandes:', error);
+      throw new Error('Erreur lors de la récupération des demandes: ' + error.message);
     }
     
-    console.log('✅ Invitations récupérées:', data?.length || 0, 'invitations');
+    // Mapper les données pour compatibilité
+    const mappedData = data?.map(d => ({
+      ...d,
+      id: d.id_demande,
+      service: d.description?.substring(0, 50) || 'Demande'
+    })) || [];
+    
+    console.log('✅ Demandes récupérées:', mappedData?.length || 0, 'demandes');
     
     return {
       success: true,
-      data: data || [],
-      count: data?.length || 0
+      data: mappedData,
+      count: mappedData?.length || 0
     };
     
   } catch (error) {
-    console.error('💥 Erreur lors de la récupération des invitations:', error);
+    console.error('💥 Erreur lors de la récupération des demandes:', error);
     return {
       success: false,
-      error: error.message || 'Erreur lors de la récupération des invitations'
+      error: error.message || 'Erreur lors de la récupération des demandes'
     };
   }
 };
@@ -249,10 +259,14 @@ export const getInvitationsForParticulier = async (particulierId, options = {}) 
  */
 export const updateInvitationStatus = async (invitationId, nouveauStatut) => {
   try {
-    const statutsValides = ['acceptée', 'refusée'];
-    
-    if (!statutsValides.includes(nouveauStatut)) {
-      throw new Error(`Statut invalide. Statuts valides: ${statutsValides.join(', ')}`);
+    // Les valeurs exactes de l'enum demande_statut: pending, accepted, refused, completed, cancelled
+    let statutToSave;
+    if (nouveauStatut === 'acceptée' || nouveauStatut === 'accepté') {
+      statutToSave = 'accepted';
+    } else if (nouveauStatut === 'refusée' || nouveauStatut === 'refusé') {
+      statutToSave = 'refused';
+    } else {
+      throw new Error(`Statut invalide: ${nouveauStatut}`);
     }
     
     // Récupérer l'utilisateur connecté
@@ -262,38 +276,37 @@ export const updateInvitationStatus = async (invitationId, nouveauStatut) => {
     }
     
     // Vérifier que l'utilisateur est bien l'artisan destinataire
-    const { data: invitation } = await supabase
-      .from('invitations')
+    const { data: demande } = await supabase
+      .from('demande')
       .select('id_artisan, statut')
-      .eq('id', invitationId)
+      .eq('id_demande', invitationId)
       .single();
     
-    if (!invitation) {
-      throw new Error('Invitation non trouvée');
+    if (!demande) {
+      throw new Error('Demande non trouvée');
     }
     
-    if (invitation.id_artisan !== user.id) {
-      throw new Error('Vous n\'êtes pas autorisé à modifier cette invitation');
+    if (demande.id_artisan !== user.id) {
+      throw new Error('Vous n\'êtes pas autorisé à modifier cette demande');
     }
     
-    if (invitation.statut !== 'en attente') {
-      throw new Error('Cette invitation a déjà été traitée');
+    if (demande.statut !== 'pending') {
+      throw new Error('Cette demande a déjà été traitée');
     }
     
     // Mise à jour du statut
     const { data, error } = await supabase
-      .from('invitations')
+      .from('demande')
       .update({
-        statut: nouveauStatut,
+        statut: statutToSave,
         updated_at: new Date().toISOString()
       })
-      .eq('id', invitationId)
+      .eq('id_demande', invitationId)
       .select(`
         *,
-        particulier:particulier!invitations_id_particulier_fkey(
-          nom,
-          prenom,
-          email
+        particulier:particulier!demande_id_particulier_fkey(
+          nom_particulier,
+          prenom_particulier
         )
       `)
       .single();
@@ -303,12 +316,19 @@ export const updateInvitationStatus = async (invitationId, nouveauStatut) => {
       throw new Error('Erreur lors de la mise à jour du statut: ' + error.message);
     }
     
-    console.log('✅ Statut de l\'invitation mis à jour:', data);
+    // Mapper pour compatibilité avec l'UI (retourne 'accepté' ou 'refusé' pour l'affichage)
+    const mappedData = {
+      ...data,
+      id: data.id_demande,
+      statut: data.statut === 'pending' ? 'nouveau' : data.statut === 'accepted' ? 'accepté' : data.statut === 'refused' ? 'refusé' : data.statut
+    };
+    
+    console.log('✅ Statut de la demande mis à jour:', mappedData);
     
     return {
       success: true,
-      data: data,
-      message: `Invitation ${nouveauStatut} avec succès`
+      data: mappedData,
+      message: `Demande ${statutToSave} avec succès`
     };
     
   } catch (error) {

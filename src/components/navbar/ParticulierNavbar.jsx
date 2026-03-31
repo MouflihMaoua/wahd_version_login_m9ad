@@ -6,11 +6,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Search, FileText, MessageSquare,
-  User, LogOut, ChevronDown, Menu, X, FileCheck, Bell
+  User, LogOut, ChevronDown, Menu, X, FileCheck, Bell, Star
 } from 'lucide-react';
 import { useAuthStore } from '../../core/store/useAuthStore';
 import { supabase } from '../../core/services/supabaseClient';
 import toast from 'react-hot-toast';
+import logoApp from '../../assets/logo_app.png';
 
 /* ── Nav links ─────────────────────────────────────────────────── */
 const NAV_LINKS = [
@@ -18,6 +19,7 @@ const NAV_LINKS = [
   { href: '/recherche-artisan',              label: 'Chercher',         icon: Search },
   { href: '/dashboard/particulier/demandes', label: 'Demandes',         icon: FileText },
   { href: '/dashboard/particulier/devis',    label: 'Devis',            icon: FileCheck },
+  { href: '/dashboard/particulier/avis',     label: 'Avis',       icon: Star },
   { href: '/dashboard/particulier/messages', label: 'Messages',         icon: MessageSquare },
 ];
 
@@ -81,12 +83,12 @@ const ParticulierNavbar = () => {
         {/* Logo */}
         <Link to="/dashboard/particulier" className="flex items-center gap-2.5 shrink-0">
           <img
-            src="/assets/logo_app.png" alt="7rayfi"
+            src={logoApp} alt="7rayfi"
             className="w-8 h-8 object-contain"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
           <span className="text-white font-bold text-lg tracking-tight">7rayfi</span>
-          <span className="text-[#FF6B35] text-xs font-bold">.pro</span>
+          <span className="text-[#FF6B35] text-xs font-bold"></span>
         </Link>
 
         {/* Nav links — center */}
@@ -198,10 +200,10 @@ const ParticulierNavbar = () => {
       <nav className="md:hidden bg-[#1A3A5C] shadow-lg sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 h-14">
           <Link to="/dashboard/particulier" className="flex items-center gap-2">
-            <img src="/assets/logo_app.png" alt="7rayfi" className="w-7 h-7 object-contain"
+            <img src={logoApp} alt="7rayfi" className="w-7 h-7 object-contain"
               onError={(e) => { e.target.style.display = 'none'; }} />
             <span className="text-white font-bold">7rayfi</span>
-            <span className="text-[#FF6B35] text-xs font-bold">.pro</span>
+            <span className="text-[#FF6B35] text-xs font-bold"></span>
           </Link>
 
           <div className="flex items-center gap-2">

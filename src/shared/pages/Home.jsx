@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Link, useLocation } from 'react-router-dom';
 import { Search, MessageSquare, Monitor, Star, ShieldCheck, CreditCard, ArrowRight, Menu, X, Home as HomeIcon } from 'lucide-react';
 import ScrollText from '../components/ui/ScrollText';
+import logoApp from '../../assets/logo_app.png';
 
 const STEPS = [
   { num: '01', icon: Search, title: 'Chercher', desc: "Parcourez notre réseau d'artisans vérifiés et trouvez le professionnel parfait pour votre projet." },
@@ -71,7 +72,7 @@ function Navbar() {
         {location.pathname === '/' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
             <div style={{ width: 34, height: 34, background: '#e8723a', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <img src="/src/assets/logo_app.png" alt="7rayfi" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+              <img src={logoApp} alt="7rayfi" style={{ width: 18, height: 18, objectFit: 'contain' }} />
             </div>
             <span style={{ fontFamily: 'Syne', fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: -0.3 }}>
               7rayfi<span style={{ color: '#e8723a' }}>.</span>
@@ -80,7 +81,7 @@ function Navbar() {
         ) : (
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
             <div style={{ width: 34, height: 34, background: '#e8723a', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <img src="/src/assets/logo_app.png" alt="7rayfi" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+              <img src={logoApp} alt="7rayfi" style={{ width: 18, height: 18, objectFit: 'contain' }} />
             </div>
             <span style={{ fontFamily: 'Syne', fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: -0.3 }}>
               7rayfi<span style={{ color: '#e8723a' }}>.</span>
