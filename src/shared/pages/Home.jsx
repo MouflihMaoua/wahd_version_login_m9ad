@@ -108,7 +108,7 @@ function Navbar() {
           >
             Connexion
           </Link>
-          <Link to="/register" className="nav-btn-primary">S'inscrire</Link>
+          <Link to="/inscription" className="nav-btn-primary">S'inscrire</Link>
         </div>
 
         {/* Mobile burger */}
@@ -152,7 +152,7 @@ function Navbar() {
             >
               Connexion
             </Link>
-            <Link to="/register" className="nav-btn-primary" style={{ textAlign: 'center', display: 'block' }} onClick={() => setMobileOpen(false)}>S'inscrire</Link>
+            <Link to="/inscription" className="nav-btn-primary" style={{ textAlign: 'center', display: 'block' }} onClick={() => setMobileOpen(false)}>S'inscrire</Link>
           </div>
         </div>
       )}

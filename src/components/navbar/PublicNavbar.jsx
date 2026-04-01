@@ -6,7 +6,8 @@ import {
   Menu, 
   X,
   LogIn,
-  UserPlus
+  UserPlus,
+  FileText
 } from 'lucide-react';
 
 const PublicNavbar = () => {
@@ -16,6 +17,7 @@ const PublicNavbar = () => {
   const navLinks = [
     { href: '/', label: 'Accueil', icon: Home },
     { href: '/recherche-artisan', label: 'Rechercher Artisan', icon: Search },
+    { href: '/devis/creer', label: 'Devis', icon: FileText },
   ];
 
   const isActive = (path) => location.pathname === path;

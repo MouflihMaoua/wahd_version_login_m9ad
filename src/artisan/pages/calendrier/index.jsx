@@ -55,7 +55,7 @@ export default function Calendrier() {
         .from('demande')
         .select('id_demande, description, date_demande, statut, urgence, id_particulier')
         .eq('id_artisan', userId)
-        .in('statut', ['acceptee', 'en_cours', 'terminee'])
+        .in('statut', ['accepted', 'completed'])
         .order('date_demande', { ascending: true });
 
       if (error) throw error;
@@ -185,9 +185,11 @@ export default function Calendrier() {
   // Obtenir le badge de statut
   const getStatutBadge = (statut) => {
     const styles = {
-      'acceptee': 'bg-green-100 text-green-800 border-green-200',
-      'en_cours': 'bg-blue-100 text-blue-800 border-blue-200',
-      'terminee': 'bg-gray-100 text-gray-800 border-gray-200'
+      'pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'accepted': 'bg-green-100 text-green-800 border-green-200',
+      'refused': 'bg-red-100 text-red-800 border-red-200',
+      'completed': 'bg-blue-100 text-blue-800 border-blue-200',
+      'cancelled': 'bg-gray-100 text-gray-800 border-gray-200'
     };
     return styles[statut] || 'bg-gray-100 text-gray-800';
   };
@@ -333,9 +335,11 @@ export default function Calendrier() {
                     </span>
                   </div>
                   <span className={`px-2 py-1 text-xs rounded-full border ${getStatutBadge(selectedEvent.statut)}`}>
-                    {selectedEvent.statut === 'acceptee' ? 'Acceptée' :
-                     selectedEvent.statut === 'en_cours' ? 'En cours' :
-                     selectedEvent.statut === 'terminee' ? 'Terminée' : selectedEvent.statut}
+                    {selectedEvent.statut === 'pending' ? 'En attente' :
+                     selectedEvent.statut === 'accepted' ? 'Acceptée' :
+                     selectedEvent.statut === 'refused' ? 'Refusée' :
+                     selectedEvent.statut === 'completed' ? 'Terminée' :
+                     selectedEvent.statut === 'cancelled' ? 'Annulée' : selectedEvent.statut}
                   </span>
                 </div>
                 <button

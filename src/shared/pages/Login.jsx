@@ -143,6 +143,30 @@ const Login = () => {
         }
     };
 
+    // Gestionnaire de connexion avec Google
+    const handleGoogleSignIn = async () => {
+        try {
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/auth/callback`,
+                },
+            });
+
+            if (error) {
+                console.error('Erreur Google OAuth:', error);
+                toast.error(`Erreur connexion Google: ${error.message}`);
+                return;
+            }
+
+            // La redirection est gérée automatiquement par Supabase
+            console.log('Google OAuth initiated:', data);
+        } catch (error) {
+            console.error('Exception Google OAuth:', error);
+            toast.error('Une erreur est survenue lors de la connexion avec Google');
+        }
+    };
+
     // Fonction pour vérifier si un champ a une erreur
     const hasError = (fieldName) => {
         return errors[fieldName] && errors[fieldName].length > 0;
@@ -273,7 +297,11 @@ const Login = () => {
                             <div className="flex-grow border-t border-gray-100"></div>
                         </div>
 
-                        <button type="button" className="w-full bg-white border border-gray-100 text-brand-dark py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center">
+                        <button 
+                            type="button" 
+                            onClick={handleGoogleSignIn}
+                            className="w-full bg-white border border-gray-100 text-brand-dark py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center"
+                        >
                             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5 mr-3" alt="Google" />
                             Continuer avec Google
                         </button>

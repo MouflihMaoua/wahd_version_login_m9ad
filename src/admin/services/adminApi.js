@@ -2,6 +2,40 @@ import { supabase } from '../../core/services/supabaseClient';
 
 const ORDER_RECENT = { ascending: false };
 
+export async function addUserAsAdmin(userId, nom = 'Admin', prenom = 'User') {
+  const { data, error } = await supabase
+    .from('administrateur')
+    .insert([{ 
+      id_admin: userId,
+      nom: nom,
+      prenom: prenom,
+      telephone: null
+    }])
+    .select();
+  
+  if (error) {
+    console.error('Erreur addUserAsAdmin:', error);
+    throw new Error(error.message);
+  }
+  
+  return data;
+}
+
+export async function checkIfUserIsAdmin(userId) {
+  const { data, error } = await supabase
+    .from('administrateur')
+    .select('id_admin')
+    .eq('id_admin', userId)
+    .maybeSingle();
+  
+  if (error) {
+    console.error('Erreur checkIfUserIsAdmin:', error);
+    return false;
+  }
+  
+  return !!data;
+}
+
 export async function fetchCounts() {
   const results = await Promise.all([
     supabase.from('artisan').select('*', { count: 'exact', head: true }),
@@ -163,6 +197,20 @@ export async function fetchInvitations({ page = 0, pageSize = 15, statut = 'tous
   const { data, error, count } = await q;
   if (error) throw new Error(error.message);
   return { rows: data ?? [], total: count ?? 0 };
+}
+
+export async function fetchAllDevis() {
+  const { data, error } = await supabase
+    .from('devis')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    console.error('Erreur fetchAllDevis:', error);
+    throw new Error(error.message);
+  }
+  
+  return data ?? [];
 }
 
 export async function fetchDevisList({ page = 0, pageSize = 12, statut = 'tous', search = '' }) {

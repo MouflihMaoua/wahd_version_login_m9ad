@@ -2,10 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Users,
   Hammer,
-  Inbox,
   FileSpreadsheet,
   Clock,
-  Activity,
   Download,
 } from 'lucide-react';
 import { AdminCard, AdminCardHeader } from '../components/ui/AdminCard';
@@ -115,13 +113,6 @@ export default function OverviewPage() {
               chip: 'Utilisateurs clients',
             },
             {
-              label: 'Demandes & invitations',
-              value: c.demandes,
-              icon: Inbox,
-              accent: 'from-sky-500/10 to-white',
-              chip: `${c.pendingDemandes} encore « en attente »`,
-            },
-            {
               label: 'Devis',
               value: c.devis,
               icon: FileSpreadsheet,
@@ -134,13 +125,6 @@ export default function OverviewPage() {
               icon: Clock,
               accent: 'from-amber-500/15 to-white',
               chip: 'Artisans à traiter',
-            },
-            {
-              label: 'Activité invitations',
-              value: c.pendingDemandes,
-              icon: Activity,
-              accent: 'from-violet-500/10 to-white',
-              chip: 'Demandes ouvertes',
             },
           ].map((card, i) => (
             <AdminCard key={card.label} delay={i * 0.04} className="overflow-hidden">
